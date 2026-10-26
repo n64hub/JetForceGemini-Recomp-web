@@ -47,10 +47,21 @@ index 1cb3f6a..b117649 100644
  
      if (ucode_func == nullptr) {
 diff --git a/ultramodern/include/ultramodern/renderer_context.hpp b/ultramodern/include/ultramodern/renderer_context.hpp
-index c543624..02e9d8d 100644
+index 7f9c814..f825da6 100644
 --- a/ultramodern/include/ultramodern/renderer_context.hpp
 +++ b/ultramodern/include/ultramodern/renderer_context.hpp
-@@ -83,7 +83,7 @@ namespace ultramodern {
+@@ -72,6 +72,10 @@ namespace ultramodern {
+             GraphicsDeviceNotFound
+         };
+ 
++        // How much of RDRAM the copy each graphics task's display list is read from holds (submit_rsp_task): its
++        // first 8 MB, or more once the game puts display lists of its own past them (the kept blood splats).
++        void set_rdram_snapshot_size(size_t size);
++
+         class RendererContext {
+             public:
+                 virtual ~RendererContext() = default;
+@@ -83,7 +87,7 @@ namespace ultramodern {
                  virtual bool update_config(const GraphicsConfig& old_config, const GraphicsConfig& new_config) = 0;
  
                  virtual void enable_instant_present() = 0;
@@ -60,7 +71,7 @@ index c543624..02e9d8d 100644
                  virtual void update_screen() = 0;
                  virtual void shutdown() = 0;
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index 343d069..97b6cd0 100644
+index c3d2af7..e84a42a 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -1,5 +1,6 @@
@@ -87,7 +98,7 @@ index 343d069..97b6cd0 100644
  };
  
  struct ScreenUpdateAction {
-@@ -505,6 +509,13 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -510,6 +514,13 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
      // Notify the caller thread that this thread is ready.
      thread_ready->signal();
  
@@ -101,7 +112,7 @@ index 343d069..97b6cd0 100644
      while (!exited) {
          // Try to pull an action from the queue
          Action action;
-@@ -515,6 +526,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -520,6 +531,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
                  // start another graphics task until the RDP is also complete. Games usually preserve the RSP inputs until the RDP
                  // is finished as well, so sending this early shouldn't be an issue in most cases.
                  // If this causes issues then the logic can be replaced with responding to yield requests.
@@ -109,7 +120,7 @@ index 343d069..97b6cd0 100644
                  sp_complete();
                  ultramodern::measure_input_latency();
  
-@@ -522,9 +534,43 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -527,9 +539,43 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
                  ultramodern::extensions::on_displaylist_submitted(displaylist);
  
                  [[maybe_unused]] auto renderer_start = std::chrono::high_resolution_clock::now();
@@ -154,7 +165,19 @@ index 343d069..97b6cd0 100644
                  dp_complete();
                  // TODO hook the parsed event up to the actual parsing point when a callback is added to RT64.
                  ultramodern::extensions::on_displaylist_parsed(displaylist);
-@@ -713,8 +759,17 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+@@ -714,12 +760,29 @@ extern "C" PTR(void) osViGetCurrentFramebuffer() {
+     return events_context.vi.get_cur_state()->framebuffer;
+ }
+ 
++// RDRAM's first 8 MB, which holds every list the game makes, until the game says it puts lists past them: copying
++// 16 MB for each list would cost as much again on the game thread for a game that doesn't.
++static std::atomic<size_t> rdram_snapshot_size{ 0x800000 };
++
++void ultramodern::renderer::set_rdram_snapshot_size(size_t size) {
++    rdram_snapshot_size.store(size, std::memory_order_relaxed);
++}
++
+ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
      OSTask* task = TO_PTR(OSTask, task_);
  
      // Send gfx tasks to the graphics action queue
@@ -166,9 +189,9 @@ index 343d069..97b6cd0 100644
 +    // its frame is drawn and copied, so each copy holds the frames and Z buffer the lists before it drew.
      if (task->t.type == M_GFXTASK) {
 -        events_context.action_queue.enqueue(SpTaskAction{ *task });
-+        constexpr size_t RDRAMSnapshotSize = 0x800000;
-+        std::unique_ptr<uint8_t[]> rdram_snapshot{ new uint8_t[RDRAMSnapshotSize] };
-+        std::memcpy(rdram_snapshot.get(), rdram, RDRAMSnapshotSize);
++        const size_t snapshot_size = rdram_snapshot_size.load(std::memory_order_relaxed);
++        std::unique_ptr<uint8_t[]> rdram_snapshot{ new uint8_t[snapshot_size] };
++        std::memcpy(rdram_snapshot.get(), rdram, snapshot_size);
 +        events_context.action_queue.enqueue(SpTaskAction{ *task, std::move(rdram_snapshot) });
      }
      // Set all other tasks as the RSP task

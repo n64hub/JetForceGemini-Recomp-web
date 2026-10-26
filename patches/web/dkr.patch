@@ -134,10 +134,10 @@ index 3a6d44f..4cde2a1 100644
  build_pixel_shader(JetForceGeminiRecompiled "shaders/InterfacePS.hlsl" "shaders/InterfacePS.hlsl")
  
 diff --git a/assets/launcher.rml b/assets/launcher.rml
-index 7cb8f31..6d58bd4 100644
+index e47fa8e..91df4a6 100644
 --- a/assets/launcher.rml
 +++ b/assets/launcher.rml
-@@ -388,10 +388,7 @@
+@@ -386,10 +386,7 @@
  									<div class="rl-keys">
  										<div class="rl-heading">While playing</div>
  										<div class="rl-key-row"><div class="rl-key">Select / Esc</div><div>This settings menu (Profiles, General, Gameplay, Controls, Graphics and the rest)</div></div>
@@ -166,7 +166,7 @@ index eead20a..c8a76c2 100644
      if (cached.empty()) {
          cached = std::filesystem::current_path(ec);
 diff --git a/src/debug_ui/backend.cpp b/src/debug_ui/backend.cpp
-index e44a823..f8f1d6b 100644
+index 972c46e..57eca11 100644
 --- a/src/debug_ui/backend.cpp
 +++ b/src/debug_ui/backend.cpp
 @@ -1,5 +1,26 @@
@@ -196,7 +196,7 @@ index e44a823..f8f1d6b 100644
  #include <atomic>
  
  extern "C" void jfg_tools_key(int scancode, int down, int repeat); // JFG PORT: src/jfg/jfg_ui_tools.cpp
-@@ -423,3 +444,4 @@ void set_render_hooks() {
+@@ -445,3 +466,4 @@ void set_render_hooks() {
  }
  
  }
@@ -286,6 +286,32 @@ index 84988e3..32a4107 100644
          }
      }
  }
+diff --git a/src/jfg/jfg_gore.cpp b/src/jfg/jfg_gore.cpp
+index 95e2bcc..94cb845 100644
+--- a/src/jfg/jfg_gore.cpp
++++ b/src/jfg/jfg_gore.cpp
+@@ -35,6 +35,9 @@
+ #include "jfg_hooks.h"
+ #include "jfg_options.h"
+ #include "jfg_port.h"
++#ifdef __EMSCRIPTEN__
++#include "ultramodern/renderer_context.hpp"
++#endif
+ 
+ extern "C" void bloodSpurtAdd(uint8_t* rdram, recomp_context* ctx);
+ extern "C" void bloodSpurtsDraw(uint8_t* rdram, recomp_context* ctx);
+@@ -214,6 +217,11 @@ extern "C" void jfg_blood_draw_kept(uint8_t* rdram_, recomp_context* ctx, uint32
+     // The most one pass of 64 has written, in bytes (a guess until one is seen).
+     static uint32_t pass_gfx = 64 * 8 * 8 + 0x100, pass_vtx = 64 * 6 * 10;
+     if (gfx_cursor + pass_gfx > gfx_end || vtx_cursor + pass_vtx > vtx_end) return;
++#ifdef __EMSCRIPTEN__
++    // A page's RT64 reads each list from a copy of RDRAM taken at its submit, which holds only the first 8 MB until
++    // the game puts lists past them (patches/web/N64ModernRuntime.patch): from this frame on it holds the blocks too.
++    ultramodern::renderer::set_rdram_snapshot_size(0x1000000);
++#endif
+ 
+     // The frame's list calls this part of the block; the passes write into it.
+     const uint32_t gfx_at = (uint32_t)ctx->r4, vtx_at = (uint32_t)ctx->r6;
 diff --git a/src/main.cpp b/src/main.cpp
 index d5f72ac..bedf388 100644
 --- a/src/main.cpp
@@ -795,10 +821,25 @@ index b9eb50f..b7d9f0e 100644
  #include "RmlUi/Core/StreamMemory.h"
  
 diff --git a/src/ui/ui_config.cpp b/src/ui/ui_config.cpp
-index 5301809..cce40a3 100644
+index bbdeaf7..27647bf 100644
 --- a/src/ui/ui_config.cpp
 +++ b/src/ui/ui_config.cpp
-@@ -901,6 +901,32 @@ public:
+@@ -125,8 +125,14 @@ void jfg_config_menu_refresh() {
+     if (jfg_config_menu_created) {
+         Rml::ElementDocument* doc = recompui::get_config_context_id().get_document();
+         if (Rml::Element* quit_tab = doc != nullptr ? doc->GetElementById("tab_jfg_quit") : nullptr) {
++#ifdef __EMSCRIPTEN__
++            // Never on a page: Quit Game would leave the page dead, and the game can't start itself again on the
++            // launcher there (jfg_restart_into_launcher); a reload or closing the tab is the way out.
++            quit_tab->SetProperty(Rml::PropertyId::Display, Rml::Style::Display::None);
++#else
+             if (ultramodern::is_game_started()) quit_tab->RemoveProperty(Rml::PropertyId::Display);
+             else quit_tab->SetProperty(Rml::PropertyId::Display, Rml::Style::Display::None);
++#endif
+         }
+     }
+     jfg_profile_entries.clear();
+@@ -1031,6 +1037,32 @@ public:
          recompui::update_mod_list(false);
          recompui::get_config_tabset()->AddEventListener(Rml::EventId::Tabchange, &config_tabset_listener);
          recompui::get_config_tabset()->AddEventListener(Rml::EventId::Focus, &config_focus_scroll_listener, true); // JFG PORT: capture phase
@@ -816,8 +857,8 @@ index 5301809..cce40a3 100644
 +#ifdef __EMSCRIPTEN__
 +                // A page has no mods (the live recompiler emits machine code) or texture packs (no folder to put one
 +                // in), and a program that ends leaves the page dead: a reload or closing the tab is the way out
-+                // there. So no Mods or Textures tab and no Quit.
-+                for (const char* id : { "tab_mods", "tab_jfg_textures", "config__quit-game-button" }) {
++                // there. So no Mods, Textures or Quit tab (jfg_config_menu_refresh keeps Quit hidden).
++                for (const char* id : { "tab_mods", "tab_jfg_textures", "tab_jfg_quit" }) {
 +                    if (Rml::Element* element = doc->GetElementById(id)) {
 +                        element->SetProperty(Rml::PropertyId::Display, Rml::Style::Display::None);
 +                    }
@@ -1136,10 +1177,10 @@ index b538305..34a3365 100644
                  screen_framebuffer_ = device_->createFramebuffer(plume::RenderFramebufferDesc(&color_attachment, 1));
                  screen_descriptor_set_->setTexture(0, screen_texture_.get(), plume::RenderTextureLayout::SHADER_READ);
 diff --git a/src/ui/ui_state.cpp b/src/ui/ui_state.cpp
-index 228cbfc..15cc66b 100644
+index af46478..3f5b655 100644
 --- a/src/ui/ui_state.cpp
 +++ b/src/ui/ui_state.cpp
-@@ -1180,7 +1180,10 @@ void recompui::release_image(const std::string &src) {
+@@ -1298,7 +1298,10 @@ void recompui::release_image(const std::string &src) {
  }
  
  void recompui::drop_files(const std::list<std::filesystem::path> &file_list) {

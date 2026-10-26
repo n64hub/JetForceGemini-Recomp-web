@@ -130,7 +130,9 @@ headless Chrome 155 (RTX 2070, a quiet host), the play plan drew 19.4-19.8 frame
 frames short in 165 s. The game starts rebuilding a list's memory as soon as it has submitted it, so on the page the
 runtime copies RDRAM's 8 MB at the submit and lets the game go, and RT64 reads the list, and the matrices, vertices and
 textures it points at, from the copy (`patches/web/N64ModernRuntime.patch`; `dkr.patch`'s renderer swaps
-`State::RDRAM` for it in `send_dl`). Render to RAM's copies are written to the game's RDRAM, where the CPU reads them,
+`State::RDRAM` for it in `send_dl`). Once Blood Stays draws its kept splats from the blocks in RDRAM's second 8 MB
+(`src/jfg/jfg_gore.cpp`, which RT64's `DKRAddressMask` reads), the copy is 16 MB from then on
+(`set_rdram_snapshot_size`), and a run that never draws them copies 8 MB a list. Render to RAM's copies are written to the game's RDRAM, where the CPU reads them,
 and to the copy (`patches/web/rt64.patch`, `State::gameRDRAM`). The RSP's completion comes as the graphics thread takes
 the task, and the RDP's once the frame is drawn and copied; the game's scheduler (libultra's) starts a graphics task
 only once the one before has the RDP's, so each copy holds what the lists before it drew. That scheduler is the thread
