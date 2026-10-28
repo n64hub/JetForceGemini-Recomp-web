@@ -1354,7 +1354,7 @@ index 5a88aab..9e4aa82 100644
                  break;
              }
 diff --git a/src/hle/rt64_application.cpp b/src/hle/rt64_application.cpp
-index ae2c936..91c3d65 100644
+index 28357c0..6b0efda 100644
 --- a/src/hle/rt64_application.cpp
 +++ b/src/hle/rt64_application.cpp
 @@ -66,6 +66,19 @@ namespace RT64 {
@@ -1377,7 +1377,7 @@ index ae2c936..91c3d65 100644
          return vi;
      }
  
-@@ -254,16 +267,25 @@ namespace RT64 {
+@@ -257,16 +270,25 @@ namespace RT64 {
          else if (deviceDescription.vendor == RenderDeviceVendor::AMD) {
              if (chosenGraphicsAPI == UserConfiguration::GraphicsAPI::D3D12) {
                  const uint64_t BrokenAMDDriverD3D12 = 0x1800142B080004; // Jan 2019
@@ -4850,7 +4850,7 @@ index 589d7eb..3a44342 100644
          std::vector<DrawCallTile> callTiles;
          std::vector<interop::RSPViewport> rspViewports;
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 036ac81..dc89677 100644
+index 4309c86..bead732 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -2,6 +2,11 @@
@@ -4935,7 +4935,7 @@ index 036ac81..dc89677 100644
          const bool sizeChanged = ext.sharedResources->swapChainSizeChanged;
          ext.sharedResources->swapChainSizeChanged = false;
          
-@@ -482,11 +505,17 @@ namespace RT64 {
+@@ -482,6 +505,10 @@ namespace RT64 {
          if (ext.sharedResources->fbConfigChanged || sizeChanged) {
              {
                  // Wait until the other queue has stopped using the interpolated color targets.
@@ -4944,17 +4944,22 @@ index 036ac81..dc89677 100644
 +                // changed size (going fullscreen) with interpolated frames queued.
 +                lock.unlock();
                  std::unique_lock<std::mutex> interpolatedLock(ext.sharedResources->interpolatedMutex);
+ #           if RT64_GAME_FRAME_WORKLOADS
+                 // While a present holds either set of counters (InterpolatedFrameCounters::inUse), not until the current set
+@@ -501,9 +528,11 @@ namespace RT64 {
+ #           else
                  InterpolatedFrameCounters &curFrameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
                  ext.sharedResources->interpolatedCondition.wait(interpolatedLock, [&]() {
 -                    return curFrameCounters.presented >= curFrameCounters.available;
 +                    return (curFrameCounters.presented >= curFrameCounters.available) || jfgPresentBlocked;
                  });
+ #           endif
 +                interpolatedLock.unlock();
 +                lock.lock();
              }
  
              std::scoped_lock<std::mutex> managerLock(ext.sharedResources->managerMutex);
-@@ -1059,7 +1088,7 @@ namespace RT64 {
+@@ -1076,7 +1105,7 @@ namespace RT64 {
                      }
  
                      // Do the resolve if using MSAA while target override is active and we're on the correct framebuffer pair index.
@@ -4963,7 +4968,7 @@ index 036ac81..dc89677 100644
                          overrideTarget->resize(ext.workloadGraphicsWorker, colorTarget->width, colorTarget->height);
                          overrideTarget->resolveFromTarget(ext.workloadGraphicsWorker, colorTarget, ext.shaderLibrary);
                      }
-@@ -1133,8 +1162,13 @@ namespace RT64 {
+@@ -1150,8 +1179,13 @@ namespace RT64 {
      }
  
      void WorkloadQueue::threadAdvanceBarrier() {
@@ -4979,7 +4984,7 @@ index 036ac81..dc89677 100644
      }
  
      void WorkloadQueue::threadAdvanceWorkloadId(uint64_t newWorkloadId) {
-@@ -1282,6 +1316,13 @@ namespace RT64 {
+@@ -1299,6 +1333,13 @@ namespace RT64 {
                              continue;
                          }
  
@@ -4993,7 +4998,7 @@ index 036ac81..dc89677 100644
                          const auto &colorImg = fbPair.colorImage;
                          if (colorSet.find(colorImg.address) != colorSet.end()) {
                              continue;
-@@ -1364,7 +1405,24 @@ namespace RT64 {
+@@ -1381,7 +1422,24 @@ namespace RT64 {
                  }
  
                  ext.sharedResources->viOriginalRate = lastWorkload.viOriginalRate;
@@ -5019,7 +5024,7 @@ index 036ac81..dc89677 100644
                  // Get the current and previous set of frame counters. The other set can be in use by the present queue. Skip if no new present event has arrived before this workload event.
                  InterpolatedFrameCounters &prevFrameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
                  const bool useDifferentCounters = (lastPresentId != workload.presentId);
-@@ -1527,6 +1585,12 @@ namespace RT64 {
+@@ -1544,6 +1602,12 @@ namespace RT64 {
                          curFrameWeight = 1.0f;
                      }
  
@@ -5032,7 +5037,7 @@ index 036ac81..dc89677 100644
                      const bool uploadExtras = (frame == 0) && workloadConfig.raytracingEnabled;
                      if (uploadExtras) {
                          std::vector<BufferUploader::Upload> extrasUploads;
-@@ -1675,4 +1739,4 @@ namespace RT64 {
+@@ -1692,4 +1756,4 @@ namespace RT64 {
              }
          }
      }
