@@ -59,7 +59,11 @@ struct State {
 #else
     bool widescreen = false;       // render the 3D view to the full window width, see jfg_widescreen_active()
 #endif
+#ifdef __EMSCRIPTEN__
+    bool hud_corners = true;       // a page's HUD at its wide picture's edges; menus and the pause screen stay 4:3
+#else
     bool hud_corners = false;      // in widescreen, the HUD at the window's edges (jfg_hud_corners.cpp)
+#endif
     int  fov = 100;                // gameplay field of view, percent of the game's own (jfg_fov)
     int  hit_flash = 100;          // red screen when the character is hit: strength, percent (jfg_hit_flash)
     int  shadow_opacity = 50;      // how dark character shadows are drawn, percent of the game's (jfg_shadow_alpha); 50 in every profile

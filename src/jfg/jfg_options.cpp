@@ -18,9 +18,10 @@ State g;
 // Options persist in a small text file next to the working directory the game is started from.
 const char* const OPTIONS_FILE = "jfg_port_options.txt";
 #ifdef __EMSCRIPTEN__
-// The line a page adds to the file: one without it was saved by a page with the desktop's defaults, 4:3 at the game's
-// own rate with no in-between frames.
-const char* const PAGE_DEFAULTS_LINE = "page_defaults=1\n";
+// The line a page adds to the file, naming the page's defaults it was saved with: none, the desktop's (4:3 at the
+// game's own rate with no in-between frames); 1, widescreen at 60, interpolated, with the HUD in the middle 4:3; 2, the
+// HUD at the wide picture's edges too (HUD in Screen Corners).
+const char* const PAGE_DEFAULTS_LINE = "page_defaults=2\n";
 #endif
 bool g_options_loaded = false;
 
@@ -175,19 +176,23 @@ void load_options() {
     if (start_new_player_profile()) std::fprintf(stderr, "[jfg] new player: Modern profile\n");
     else if (std::FILE* f = std::fopen(OPTIONS_FILE, "r")) {
         char key[64]; int value;
-        bool page_defaults = false;
+        int page_defaults = 0;
         while (std::fscanf(f, "%63[^=]=%d\n", key, &value) == 2) {
-            if (std::strcmp(key, "page_defaults") == 0) page_defaults = true;
+            if (std::strcmp(key, "page_defaults") == 0) page_defaults = value;
             else apply_option(key, value);
         }
         std::fclose(f);
 #ifdef __EMSCRIPTEN__
-        // Saved before a page opened widescreen at 60, interpolated: those were the old defaults, so they move, once.
-        if (!page_defaults) {
+        // Saved before a page opened widescreen at 60, interpolated, or before its HUD went to the edges: those were the
+        // old defaults, which no player chose, so they move, once.
+        if (page_defaults < 2) {
             const State defaults;
-            g.widescreen = defaults.widescreen;
-            g.frame_rate = defaults.frame_rate;
-            g.smooth_motion = defaults.smooth_motion;
+            if (page_defaults < 1) {
+                g.widescreen = defaults.widescreen;
+                g.frame_rate = defaults.frame_rate;
+                g.smooth_motion = defaults.smooth_motion;
+            }
+            g.hud_corners = defaults.hud_corners;
             save_options();
         }
 #else

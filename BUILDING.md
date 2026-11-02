@@ -104,7 +104,9 @@ display's rate (`src/jfg/jfg_options.h`): a page interpolates to the display's r
 defaults to (N64Recomp-browser's CLAUDE.md, Rules). A new player starts on the Modern profile, as on the desktop, and
 on a page Modern and the other built-in profiles but Original keep that rate (`profile_text` in
 `src/jfg/jfg_profiles.cpp`) where the desktop's run the game's own pacing smoothed to 60; Original sets the game's
-own, 4:3, still interpolated. Settings a page saved before it opened that way are moved to it once (`page_defaults`
+own, 4:3, still interpolated. Its HUD is at the wide picture's edges (HUD in Screen Corners, on with Emscripten as in
+those profiles, `src/jfg/jfg_hud_corners.cpp`; within 16:9 at the default HUD ratio), while its menus, pause screen and
+full-screen overlays stay 4:3. Settings a page saved before it opened that way are moved to it once (`page_defaults`
 in `jfg_port_options.txt`, `src/jfg/jfg_options.cpp`).
 
 The game's own pacing is 30 frames a second, dropping to 20 when a frame runs long, as on the N64, and on a page every
