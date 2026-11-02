@@ -3,14 +3,14 @@
   "Jet Force Gemini's extended play plan for N64Recomp-browser's tools/play_page.mjs, written by tools/make_plans.py,",
   "at most 5 minutes, for when a longer play than the regular one (tools/play_plan.json) is needed: the boot as the",
   "shader plan's (Load ROM once the shader list Chrome builds behind the launcher is done; Firefox builds none there,",
-  "and its line saying so is the one waited for) and Goldwood's opening as Juno, then, in the same load, four rooms",
-  "played about 30 s each: Goldwood's first as Juno, Tawfret's castle as Juno, Ichor as Vela and the Water Ruin's lost",
-  "island as Lupus, every weapon and the invulnerability cheat given (tools/shader_survey.js's arm()), out and back by",
-  "as much about where the warp leaves the character, firing, aiming, jumping, turning the camera and changing weapon.",
-  "Every room is reached by the survey's warp(), a need that fails the run unless that level is the one playing. Its",
-  "waits and holds are on the game's own clock, Time (the 60ths it adds each frame's length to), so every browser",
-  "plays as much of each room whatever frames it gives the game; the last step reads where the character is (the",
-  "player list's first object)."
+  "and its line saying so is the one waited for) and Juno picked at the character select, then, in the same load, four",
+  "rooms played about 30 s each: Goldwood's first as Juno, Tawfret's castle as Juno, Ichor as Vela and the Water Ruin's",
+  "lost island as Lupus, every weapon and the invulnerability cheat given (tools/shader_survey.js's arm()), out and",
+  "back by as much about where the warp leaves the character, firing, aiming, jumping, turning the camera and changing",
+  "weapon. Every room is reached by the survey's warp(), a need that fails the run unless that level is the one",
+  "playing. Its waits and holds are on the game's own clock, Time (the 60ths it adds each frame's length to), so every",
+  "browser plays as much of each room whatever frames it gives the game; the last step reads where the character is",
+  "(the player list's first object)."
  ],
  "page": "JetForceGeminiRecompiled.html",
  "load": [
@@ -187,8 +187,8 @@
    8000
   ],
   [
-   "eval",
-   "waitLevel(93, 12000)"
+   "need",
+   "waitLevel(365, 5000)"
   ],
   [
    "wait",

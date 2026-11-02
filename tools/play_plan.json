@@ -2,14 +2,14 @@
  "header": [
   "Jet Force Gemini's play plan for N64Recomp-browser's tools/play_page.mjs, written by tools/make_plans.py, its",
   "regular play of 2-3 minutes: the boot as the shader plan's (Load ROM once the shader list Chrome builds behind the",
-  "launcher is done; Firefox builds none there, and its line saying so is the one waited for) and Goldwood's opening",
-  "as Juno, then, in the same load, Goldwood's first room as Juno, about 25 s, reached by tools/shader_survey.js's",
-  "warp(), a need that fails the run unless that level is the one playing: every weapon and the invulnerability cheat",
-  "given (arm()), out and back by as much about where the warp leaves her, firing, aiming, jumping, turning the camera",
-  "and changing weapon. Its waits and holds are on the game's own clock, Time (the 60ths it adds each frame's length",
-  "to), so every browser plays as much of the room whatever frames it gives the game; the last step reads where the",
-  "character is (the player list's first object). tools/play_plan_extended.json goes on to three more rooms, for",
-  "when a longer play is needed."
+  "launcher is done; Firefox builds none there, and its line saying so is the one waited for) and Juno picked at the",
+  "character select, then, in the same load, Goldwood's first room as Juno, about 25 s, reached by",
+  "tools/shader_survey.js's warp(), a need that fails the run unless that level is the one playing: every weapon and",
+  "the invulnerability cheat given (arm()), out and back by as much about where the warp leaves her, firing, aiming,",
+  "jumping, turning the camera and changing weapon. Its waits and holds are on the game's own clock, Time (the 60ths it",
+  "adds each frame's length to), so every browser plays as much of the room whatever frames it gives the game; the last",
+  "step reads where the character is (the player list's first object). tools/play_plan_extended.json goes on to three",
+  "more rooms, for when a longer play is needed."
  ],
  "page": "JetForceGeminiRecompiled.html",
  "load": [
@@ -186,8 +186,8 @@
    8000
   ],
   [
-   "eval",
-   "waitLevel(93, 12000)"
+   "need",
+   "waitLevel(365, 5000)"
   ],
   [
    "wait",

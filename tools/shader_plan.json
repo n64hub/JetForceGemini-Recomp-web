@@ -196,8 +196,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -1048,8 +1048,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -1673,8 +1673,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -2595,8 +2595,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -3080,8 +3080,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -3276,8 +3276,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -3637,8 +3637,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -3897,8 +3897,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -4489,8 +4489,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -4784,8 +4784,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -5277,8 +5277,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -5762,8 +5762,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -6123,8 +6123,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -6170,8 +6170,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -6267,8 +6267,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -6496,8 +6496,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -7088,8 +7088,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -7251,8 +7251,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -7777,8 +7777,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -8037,8 +8037,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
@@ -8332,8 +8332,8 @@
      30000
     ],
     [
-     "eval",
-     "waitLevel(93, 15000)"
+     "need",
+     "waitLevel(365, 5000)"
     ],
     [
      "wait",
