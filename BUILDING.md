@@ -24,7 +24,9 @@ port's changes to them made again for those commits on top:
 The page needs recompiled code of its own: the web-patched N64Recomp writes a tail call as a `return_call` and keeps
 the FPU's rounding mode for float-to-int conversions (WebAssembly's own instructions only round to nearest). That
 N64Recomp has no call tracking for the crash log, so `jfg.us.toml`'s hooks lose their `recomp_exit_function()` calls in
-the copy it reads.
+the copy it reads, which also takes the page's own hooks (`patches/web/jfg.us.web.toml`). Among them: the game's reads
+of hardware through KSEG1 (its anti-piracy checks and AI_LEN) get their values without the read, since the desktop's
+hardware pages past RDRAM (`src/jfg/jfg_glue.cpp`) are the wasm heap's own memory on a page.
 
 What the page leaves out, since a browser can't do it: mods (the live recompiler writes machine code, which a page
 can't load), so the launcher's Get Mods page and what the port moved into mods (the Blood mod's options, Better

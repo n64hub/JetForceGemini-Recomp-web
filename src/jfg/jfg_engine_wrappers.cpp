@@ -44,11 +44,14 @@ JFG_WRAP(n_alEvtqNextEvent) {
 // reticles were lost). So at 60 fps jfg_sched_task_ready lets the task wait for one retrace since the swap was asked
 // for (1 = ready, 0 = not yet); at the original rate (-1) the game's own check runs.
 // __amHandleFrameMsg reads AI_LEN (0xA4500004) itself (osAiGetLength inlined): the runtime's audio backend's value is
-// put in that register's page first (jfg_glue.cpp, the hardware pages).
+// put in that register's page first (jfg_glue.cpp, the hardware pages). The page has no such page, so its recompiled code
+// takes the value without the read (patches/web/jfg.us.web.toml) and nothing is written here.
 extern "C" uint32_t recomp_osAiGetLength(void);
 
 JFG_WRAP(__amHandleFrameMsg) {
+#ifndef __EMSCRIPTEN__
     MEM_W(0, (gpr)(int32_t)0xA4500004u) = (int32_t)recomp_osAiGetLength();
+#endif
     __amHandleFrameMsg_orig(rdram, ctx);
 }
 

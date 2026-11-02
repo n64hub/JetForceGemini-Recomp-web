@@ -10,3 +10,109 @@
 [[patches.hook]]
 func = "__scHandleRetrace"
 text = "{ MEM_W(0X38C0, S32(0X800A << 16)) = 0; MEM_W(0X38C4, S32(0X800A << 16)) = 0; }"
+
+# The game's own reads of hardware through KSEG1 (src/jfg/jfg_glue.cpp, the hardware pages). Recompiled code turns
+# 0xA0000000 + x into rdram + 0x20000000 + x, past the emulated RDRAM: the desktop build opens those pages, but on the
+# page they are ordinary memory of the wasm heap (WebAssembly has no page protection, and the runtime's RDRAM there is
+# its 512 MB alone), where other allocations live: the game read their bytes, and the values written there for it
+# overwrote theirs. So each read is dropped here and the value genuine hardware gives is put in its register, and on
+# the page nothing is written there (jfg_glue.cpp's map_hardware).
+# The boot RAM tests' results decide whether the game sabotages itself, and osCartTest3_6105's is the first thing a
+# scene script (animseqProcessCommandList, by way of a call TrapDanglingJump patches at run time) checks: when it read
+# the heap's garbage, a new game's story scenes never started their paths or their music and never ended.
+
+# osBootRamTest1_6105 / 2: the IPL3 leftovers 0xAD090010 at 0xA02FB1F4 and 0xAD170014 at 0xA02FE1C0, each cleared after.
+[[patches.instruction]]
+vram = 0x800841A8
+func = "osBootRamTest1_6105"
+value = 0x00000000 # lw t6, 0(a0) -> nop
+
+[[patches.hook]]
+func = "osBootRamTest1_6105"
+before_vram = 0x800841AC
+text = "{ ctx->r14 = (gpr)(int32_t)0xAD090010u; }"
+
+[[patches.instruction]]
+vram = 0x800841C0
+func = "osBootRamTest1_6105"
+value = 0x00000000 # sw zero, 0(a0) -> nop
+
+[[patches.instruction]]
+vram = 0x800841D4
+func = "osBootRamTest2_6105"
+value = 0x00000000 # lw t6, 0(a0) -> nop
+
+[[patches.hook]]
+func = "osBootRamTest2_6105"
+before_vram = 0x800841D8
+text = "{ ctx->r14 = (gpr)(int32_t)0xAD170014u; }"
+
+[[patches.instruction]]
+vram = 0x800841EC
+func = "osBootRamTest2_6105"
+value = 0x00000000 # sw zero, 0(a0) -> nop
+
+# osRamTest4_6105 (overlay 156): the IPL3 leftover 0xC86E2000 at 0xA00002E8.
+[[patches.instruction]]
+vram = 0x829B0004
+func = "osRamTest4_6105"
+value = 0x00000000 # lw t7, 0x2E8(t6) -> nop
+
+[[patches.hook]]
+func = "osRamTest4_6105"
+before_vram = 0x829B0008
+text = "{ ctx->r15 = (gpr)(int32_t)0xC86E2000u; }"
+
+# osCartTest3_6105 / 4 (overlays 111, 133): PI_STATUS (0xA4600010) reads idle, and the cartridge word at osRomBase +
+# 0x454 / 0xA5C comes from the user's ROM (jfg_cart_read32), so the comparison runs against real data.
+[[patches.instruction]]
+vram = 0x826E0018
+func = "osCartTest3_6105"
+value = 0x00001025 # lw v0, 0(v1) -> or v0, zero, zero
+
+[[patches.instruction]]
+vram = 0x826E002C
+func = "osCartTest3_6105"
+value = 0x00001025 # lw v0, 0(v1) -> or v0, zero, zero
+
+[[patches.instruction]]
+vram = 0x826E0050
+func = "osCartTest3_6105"
+value = 0x00000000 # lw v0, 0(t0) -> nop
+
+[[patches.hook]]
+func = "osCartTest3_6105"
+before_vram = 0x826E0054
+text = "{ uint32_t jfg_cart_read32(uint32_t); ctx->r2 = (gpr)(int32_t)jfg_cart_read32((uint32_t)ctx->r8); }"
+
+[[patches.instruction]]
+vram = 0x82840018
+func = "osCartTest4_6105"
+value = 0x00001025 # lw v0, 0(v1) -> or v0, zero, zero
+
+[[patches.instruction]]
+vram = 0x8284002C
+func = "osCartTest4_6105"
+value = 0x00001025 # lw v0, 0(v1) -> or v0, zero, zero
+
+[[patches.instruction]]
+vram = 0x82840050
+func = "osCartTest4_6105"
+value = 0x00000000 # lw v0, 0(t0) -> nop
+
+[[patches.hook]]
+func = "osCartTest4_6105"
+before_vram = 0x82840054
+text = "{ uint32_t jfg_cart_read32(uint32_t); ctx->r2 = (gpr)(int32_t)jfg_cart_read32((uint32_t)ctx->r8); }"
+
+# __amHandleFrameMsg has osAiGetLength inlined (AI_LEN, 0xA4500004): the runtime's audio backend's value instead, which
+# its wrapper (jfg_engine_wrappers.cpp) writes to the register's page on the desktop.
+[[patches.instruction]]
+vram = 0x80001F2C
+func = "__amHandleFrameMsg"
+value = 0x00000000 # lw t7, 4(t6) -> nop
+
+[[patches.hook]]
+func = "__amHandleFrameMsg"
+before_vram = 0x80001F30
+text = "{ uint32_t recomp_osAiGetLength(void); ctx->r15 = (gpr)(int32_t)recomp_osAiGetLength(); }"

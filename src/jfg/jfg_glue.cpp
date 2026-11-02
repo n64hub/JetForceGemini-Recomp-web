@@ -192,7 +192,19 @@ extern "C" void __osSiRawStartDma_recomp(uint8_t* rdram, recomp_context* ctx) {
 //   0xB0000454 / 0xB0000A5C (the boot code) come from the user's ROM, so the comparison runs against real data.
 // - __amHandleFrameMsg reads AI_LEN (0xA4500004) inlined; its wrapper (jfg_engine_wrappers.cpp) puts the runtime's
 //   audio backend's value there first.
+// The web page opens no pages and writes none of this: there the range past RDRAM is ordinary memory of the wasm heap,
+// which other allocations use. patches/web/jfg.us.web.toml drops each of those reads instead and puts the same values
+// in their registers, the cartridge words from jfg_cart_read32.
 namespace recomp { std::span<const uint8_t> get_rom(); }
+
+// The big-endian word of the user's ROM at a cartridge address (0xB0000000 + offset), as the PI bus delivers it: the
+// page's hooks in osCartTest3_6105 / 4.
+extern "C" uint32_t jfg_cart_read32(uint32_t address) {
+    std::span<const uint8_t> rom = recomp::get_rom();
+    const uint32_t off = (address & 0x0FFFFFFFu) & ~3u;
+    if ((uint64_t)off + 4 > rom.size()) return 0;
+    return ((uint32_t)rom[off] << 24) | ((uint32_t)rom[off + 1] << 16) | ((uint32_t)rom[off + 2] << 8) | rom[off + 3];
+}
 
 namespace {
 bool open_hardware_page(uint8_t* rdram, uint32_t kseg1) {
@@ -206,6 +218,10 @@ bool open_hardware_page(uint8_t* rdram, uint32_t kseg1) {
 }
 
 void map_hardware(uint8_t* rdram) {
+#ifdef __EMSCRIPTEN__
+    (void)rdram;
+    return;
+#endif
     const uint32_t pages[] = { 0xA0000000u, 0xA02FB000u, 0xA02FE000u, 0xA4500000u, 0xA4600000u, 0xB0000000u };
     for (uint32_t page : pages) {
         if (!open_hardware_page(rdram, page)) fprintf(stderr, "[jfg] could not open the page for 0x%08X\n", page);
