@@ -22,12 +22,16 @@
 #                                       queue_audio_buffer makes for every game
 #   patches/web/N64Recomp.patch         the port's RSPRecomp change (F3DDKR's and the audio microcode's)
 #   patches/web/dkr.patch               the page's changes to the port's own code: the canvas, the menus' WGSL shaders,
-#                                       sound on the browser's audio thread, the file picker, no mods, updates or Exit
+#                                       sound on the browser's audio thread, the file picker, no mods, Get Mods, updates
+#                                       or Exit
 # The recompiled code is made by N64Recomp patched for the web (N64Recomp-browser): it writes the tail calls as
 # return_calls and keeps the FPU's rounding mode for float-to-int conversions, which WebAssembly's own instructions
 # can't. That N64Recomp has no call tracking for the crash log (the port's recomp_enter_function and
 # recomp_exit_function), so jfg.us.toml's hooks lose their recomp_exit_function() calls in the copy it reads, which
-# also takes the page's own hooks (patches/web/jfg.us.web.toml).
+# also takes the page's own hooks (patches/web/jfg.us.web.toml). Before it, as build_linux.sh does,
+# tools/refuse_mod_hooks.py lists the functions mods can't hook (unhookable_funcs_list) and N64Recomp writes the
+# recompiled functions' wrappers (jfg.us.toml's [wrappers]), from the game's symbols in JFGRecompSyms: a page loads no
+# mods, but its recompiled code is the desktop's.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 PATCHES_ONLY=false
@@ -143,11 +147,13 @@ step "Recompiling the game"
 [ -f baserom.us.recomp.z64 ] && [ baserom.us.recomp.z64 -nt baserom.us.z64 ] ||
     python3 tools/prepare_overlays.py baserom.us.z64 - baserom.us.recomp.z64 - tools/jfg.us.dynamic_relocs.json
 cat jfg.us.toml "$HERE/patches/web/jfg.us.web.toml" |
-    sed -e 's/ recomp_exit_function();//g' -e 's|^output_func_path = .*|output_func_path = "RecompiledFuncs.new"|' > jfg.us.web.toml
+    sed -e 's/ recomp_exit_function();//g' -e 's|^output_func_path = .*|output_func_path = "RecompiledFuncs.new"|' \
+        -e 's|^unhookable_funcs_list = .*|unhookable_funcs_list = "RecompiledFuncs.new/unhookable_funcs.txt"|' > jfg.us.web.toml
 rm -rf RecompiledFuncs.new && mkdir -p RecompiledFuncs.new RecompiledFuncs
+python3 tools/refuse_mod_hooks.py RecompiledFuncs.new tools/jfg.us.dynamic_relocs.json JFGRecompSyms/jfg.us.syms.toml jfg.us.web.toml
 ./build-tools/N64Recomp jfg.us.web.toml > recomp.log 2>&1 || { tail -20 recomp.log; fail "N64Recomp failed (web-build/recomp.log)"; }
 python3 tools/merge_gen_anim_data.py RecompiledFuncs.new
-python3 tools/fix_dynamic_relocs.py RecompiledFuncs.new tools/jfg.us.dynamic_relocs.json baserom.us.recomp.z64 jfg.us.syms.toml
+python3 tools/fix_dynamic_relocs.py RecompiledFuncs.new tools/jfg.us.dynamic_relocs.json baserom.us.recomp.z64 JFGRecompSyms/jfg.us.syms.toml
 for file in RecompiledFuncs.new/*; do
     cmp -s "$file" "RecompiledFuncs/${file##*/}" || cp "$file" RecompiledFuncs/
 done

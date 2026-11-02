@@ -26,10 +26,12 @@ the FPU's rounding mode for float-to-int conversions (WebAssembly's own instruct
 N64Recomp has no call tracking for the crash log, so `jfg.us.toml`'s hooks lose their `recomp_exit_function()` calls in
 the copy it reads.
 
-What the page leaves out, since a browser can't do it: mods a player adds (the live recompiler writes machine code,
-which a page can't load), texture packs (there is no folder to put one in), the debug window, the F10 toolbar and the
-overlay (they draw through ImGui's Vulkan and Direct3D 12 backends), and Exit and Quit (a program that ends leaves the
-page dead: a reload or closing the tab is the way out). The launcher lists only the keys the page has.
+What the page leaves out, since a browser can't do it: mods (the live recompiler writes machine code, which a page
+can't load), so the launcher's Get Mods page and what the port moved into mods (the Blood mod's options, Better
+Floyd's Hide Floyd); texture packs (there is no folder to put one in); the debug window, the F10 toolbar and the
+overlay (they draw through ImGui's Vulkan and Direct3D 12 backends); the update check; and Exit and Quit (a program
+that ends leaves the page dead: a reload or closing the tab is the way out). The launcher lists only the keys the page
+has. The first visit asks for a language as the desktop build's first start does; Esc closes it in English.
 
 ## What it needs
 
@@ -97,12 +99,13 @@ How the page plays in Chrome and Firefox, run by run, is recorded in N64Recomp-b
 [plays.jsonl](https://github.com/n64hub/N64Recomp-browser/blob/main/plays.jsonl) and its
 [games table](https://github.com/n64hub/N64Recomp-browser#games).
 
-The page opens widescreen, at Game Frame Rate 60 (the menu's "60 (Experimental)") and with Frame Interpolation at
-Monitor (`src/jfg/jfg_options.h`), where the desktop build opens 4:3 at the game's own pacing without Frame
-Interpolation: a page interpolates to the display's rate whatever its desktop build defaults to (N64Recomp-browser's
-CLAUDE.md, Rules). Settings a page saved before it did are moved to those once (`page_defaults` in
-`jfg_port_options.txt`, `src/jfg/jfg_options.cpp`); the Default profile still sets the game's own
-(`src/jfg/jfg_profiles.cpp`).
+The page opens widescreen, at Game Frame Rate 60 (the menu's "60 (Experimental)") and with Smooth Motion up to the
+display's rate (`src/jfg/jfg_options.h`): a page interpolates to the display's rate whatever its desktop build
+defaults to (N64Recomp-browser's CLAUDE.md, Rules). A new player starts on the Modern profile, as on the desktop, and
+on a page Modern and the other built-in profiles but Original keep that rate (`profile_text` in
+`src/jfg/jfg_profiles.cpp`) where the desktop's run the game's own pacing smoothed to 60; Original sets the game's
+own, 4:3, still interpolated. Settings a page saved before it opened that way are moved to it once (`page_defaults`
+in `jfg_port_options.txt`, `src/jfg/jfg_options.cpp`).
 
 The game's own pacing is 30 frames a second, dropping to 20 when a frame runs long, as on the N64, and on a page every
 frame does: the game sends two display lists a frame, and each takes RT64 10-12 ms with the exact copy, about 6 ms of
@@ -130,7 +133,7 @@ headless Chrome 155 (RTX 2070, a quiet host), the play plan drew 19.4-19.8 frame
 frames short in 165 s. The game starts rebuilding a list's memory as soon as it has submitted it, so on the page the
 runtime copies RDRAM's 8 MB at the submit and lets the game go, and RT64 reads the list, and the matrices, vertices and
 textures it points at, from the copy (`patches/web/N64ModernRuntime.patch`; `dkr.patch`'s renderer swaps
-`State::RDRAM` for it in `send_dl`). Once Blood Stays draws its kept splats from the blocks in RDRAM's second 8 MB
+`State::RDRAM` for it in `send_dl`). Once the Blood mod's Blood Stays (a desktop build's) draws its kept splats from the blocks in RDRAM's second 8 MB
 (`src/jfg/jfg_gore.cpp`, which RT64's `DKRAddressMask` reads), the copy is 16 MB from then on
 (`set_rdram_snapshot_size`), and a run that never draws them copies 8 MB a list. Render to RAM's copies are written to the game's RDRAM, where the CPU reads them,
 and to the copy (`patches/web/rt64.patch`, `State::gameRDRAM`). The RSP's completion comes as the graphics thread takes

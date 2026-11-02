@@ -74,3 +74,273 @@ index 518477d..1c9af6f 100644
          case InstrId::rsp_mfc0:
              print_line("{}{} = {}", ctx_gpr_prefix(rt), rt, expected_c0_reg_value(rd));
              break;
+diff --git a/include/recompiler/context.h b/include/recompiler/context.h
+index 9dc719b..dad9697 100644
+--- a/include/recompiler/context.h
++++ b/include/recompiler/context.h
+@@ -33,6 +33,9 @@ namespace N64Recomp {
+         bool reimplemented;
+         bool stubbed;
+         std::unordered_map<int32_t, std::string> function_hooks;
++        // The name the function is defined under when it differs from name (a wrapped function's original); calls and
++        // the function tables keep using name. Empty: name.
++        std::string definition_name;
+ 
+         Function(uint32_t vram, uint32_t rom, std::vector<uint32_t> words, std::string name, uint16_t section_index, bool ignored = false, bool reimplemented = false, bool stubbed = false)
+                 : vram(vram), rom(rom), words(std::move(words)), name(std::move(name)), section_index(section_index), ignored(ignored), reimplemented(reimplemented), stubbed(stubbed) {}
+@@ -236,6 +239,8 @@ namespace N64Recomp {
+         bool skip_validating_reference_symbols = true;
+         // Whether all function calls (excluding reference symbols) should go through lookup.
+         bool use_lookup_for_all_function_calls = false;
++        // Whether calls set $ra to the return address first, as the hardware does (for code a game reads $ra in).
++        bool set_ra_on_calls = false;
+ 
+         //// Only used by the CLI, TODO move this to a struct in the internal headers.
+         // A mapping of function name to index in the functions vector
+diff --git a/src/config.cpp b/src/config.cpp
+index 1066aff..8fa7355 100644
+--- a/src/config.cpp
++++ b/src/config.cpp
+@@ -462,6 +462,28 @@ N64Recomp::Config::Config(const char* path) {
+ 
+             // Function hooks (optional)
+             function_hooks = get_function_hooks(table);
++
++            // Functions mods can't hook (optional): a list file, one name per line, # starts a comment.
++            std::optional<std::string> unhookable_opt = (*table)["unhookable_funcs_list"].value<std::string>();
++            if (unhookable_opt.has_value()) {
++                unhookable_funcs_list_path = concat_if_not_empty(basedir, unhookable_opt.value());
++            }
++        }
++
++        // Wrapped functions (optional)
++        toml::node_view wrappers_data = config_data["wrappers"];
++        if (wrappers_data.is_table()) {
++            std::optional<std::string> list_opt = wrappers_data["funcs_list"].value<std::string>();
++            std::optional<std::string> prefix_opt = wrappers_data["wrapper_prefix"].value<std::string>();
++            std::optional<std::string> register_opt = wrappers_data["register_func"].value<std::string>();
++            std::optional<std::string> output_opt = wrappers_data["output_file"].value<std::string>();
++            if (!list_opt.has_value() || !prefix_opt.has_value() || !register_opt.has_value() || !output_opt.has_value()) {
++                throw toml::parse_error("[wrappers] needs funcs_list, wrapper_prefix, register_func and output_file", wrappers_data.node()->source());
++            }
++            wrapped_funcs_list_path = concat_if_not_empty(basedir, list_opt.value());
++            wrapper_prefix = prefix_opt.value();
++            wrapper_register_func = register_opt.value();
++            wrappers_output_file = output_opt.value();
+         }
+ 
+         // Use trace mode if enabled (optional)
+diff --git a/src/config.h b/src/config.h
+index 7d6db23..67c32b3 100644
+--- a/src/config.h
++++ b/src/config.h
+@@ -58,6 +58,14 @@ namespace N64Recomp {
+         std::vector<std::string> stubbed_funcs;
+         std::vector<std::string> ignored_funcs;
+         std::vector<std::string> renamed_funcs;
++        // Functions mods can't hook: their function table entry gets rom_size 0 (optional, a list file).
++        std::filesystem::path unhookable_funcs_list_path;
++        // Functions wrapped by the game's own code (optional, the [wrappers] table): each listed function <name> is
++        // defined as <name>_orig, and a generated <name> calls <wrapper_prefix><name>, which calls <name>_orig.
++        std::filesystem::path wrapped_funcs_list_path;
++        std::string wrapper_prefix;
++        std::string wrapper_register_func;
++        std::string wrappers_output_file;
+         std::vector<InstructionPatch> instruction_patches;
+         std::vector<FunctionTextHook> function_hooks;
+         std::vector<FunctionSize> manual_func_sizes;
+diff --git a/src/main.cpp b/src/main.cpp
+index 34b2643..e311b09 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -87,6 +87,33 @@ bool read_list_file(const std::filesystem::path& filename, std::vector<std::stri
+     return true;
+ }
+ 
++// A list of function names, one per line; # starts a comment. Exits on a missing file or a name listed twice.
++std::vector<std::string> read_func_name_list(const std::filesystem::path& filename) {
++    std::ifstream input_file{ filename };
++    if (!input_file.good()) {
++        fmt::print(stderr, "Failed to read function list {}\n", filename.string());
++        std::exit(EXIT_FAILURE);
++    }
++
++    std::vector<std::string> names{};
++    std::unordered_set<std::string> seen{};
++    std::string line;
++    while (std::getline(input_file, line)) {
++        line = line.substr(0, line.find('#'));
++        size_t start = line.find_first_not_of(" \t\r");
++        if (start == std::string::npos) {
++            continue;
++        }
++        std::string name = line.substr(start, line.find_last_not_of(" \t\r") + 1 - start);
++        if (!seen.insert(name).second) {
++            fmt::print(stderr, "Function {} is listed twice in {}\n", name, filename.string());
++            std::exit(EXIT_FAILURE);
++        }
++        names.emplace_back(std::move(name));
++    }
++    return names;
++}
++
+ bool compare_files(const std::filesystem::path& file1_path, const std::filesystem::path& file2_path) {
+     static std::vector<char> file1_buf(65536);
+     static std::vector<char> file2_buf(65536);
+@@ -599,6 +626,39 @@ int main(int argc, char** argv) {
+         func.function_hooks[instruction_index] = patch.text;
+     }
+ 
++    // Wrapped functions: defined as <name>_orig; the wrappers file defines <name>.
++    std::vector<std::string> wrapped_funcs{};
++    if (!config.wrapped_funcs_list_path.empty()) {
++        wrapped_funcs = read_func_name_list(config.wrapped_funcs_list_path);
++        for (const std::string& name : wrapped_funcs) {
++            auto func_find = context.functions_by_name.find(name);
++            if (func_find == context.functions_by_name.end()) {
++                exit_failure(fmt::format("Function {} is wrapped in the config file but does not exist!\n", name));
++            }
++            N64Recomp::Function& func = context.functions[func_find->second];
++            if (func.ignored || func.reimplemented || func.words.empty()) {
++                exit_failure(fmt::format("Function {} is wrapped in the config file but isn't recompiled!\n", name));
++            }
++            func.definition_name = name + "_orig";
++        }
++    }
++
++    // Functions mods can't hook: rom_size 0 in the function table, which the runtime refuses to hook.
++    std::unordered_set<size_t> unhookable_func_indices{};
++    if (!config.unhookable_funcs_list_path.empty()) {
++        for (const std::string& name : read_func_name_list(config.unhookable_funcs_list_path)) {
++            auto func_find = context.functions_by_name.find(name);
++            if (func_find == context.functions_by_name.end()) {
++                exit_failure(fmt::format("Function {} is unhookable in the config file but does not exist!\n", name));
++            }
++            const N64Recomp::Function& func = context.functions[func_find->second];
++            if (func.ignored || func.reimplemented || func.words.empty()) {
++                exit_failure(fmt::format("Function {} is unhookable in the config file but isn't recompiled!\n", name));
++            }
++            unhookable_func_indices.insert(func_find->second);
++        }
++    }
++
+     std::ofstream current_output_file;
+     size_t output_file_count = 0;
+     size_t cur_file_function_count = 0;
+@@ -728,6 +788,9 @@ int main(int argc, char** argv) {
+ 
+         if (!func.ignored && func.words.size() != 0) {
+             declare_function(func.name);
++            if (!func.definition_name.empty()) {
++                declare_function(func.definition_name);
++            }
+             bool result;
+             const auto& func_section = context.sections[func.section_index];
+             // Apply strict patch mode validation if enabled.
+@@ -778,6 +841,29 @@ int main(int argc, char** argv) {
+         }
+     }
+ 
++    if (!wrapped_funcs.empty()) {
++        std::ofstream wrappers_file{ config.output_func_path / config.wrappers_output_file };
++        fmt::print(wrappers_file,
++            "// Generated by N64Recomp from {}. Each game function listed there now runs the game's wrapper\n"
++            "// ({}<name>), which calls <name>_orig, the recompiled original.\n"
++            "#include \"funcs.h\"\n"
++            "\n",
++            config.wrapped_funcs_list_path.filename().string(), config.wrapper_prefix);
++        for (const std::string& name : wrapped_funcs) {
++            fmt::print(wrappers_file, "void {}{}(uint8_t* rdram, recomp_context* ctx);\n", config.wrapper_prefix, name);
++            fmt::print(wrappers_file, "RECOMP_FUNC void {}(uint8_t* rdram, recomp_context* ctx) {{ {}{}(rdram, ctx); }}\n", name, config.wrapper_prefix, name);
++        }
++        fmt::print(wrappers_file,
++            "\n"
++            "// Call with recomp::overlays::register_base_wrapper, so mods' patches and hooks apply to the originals.\n"
++            "void {}(void (*reg)(recomp_func_t* wrapped, recomp_func_t* original)) {{\n",
++            config.wrapper_register_func);
++        for (const std::string& name : wrapped_funcs) {
++            fmt::print(wrappers_file, "    reg({}, {}_orig);\n", name, name);
++        }
++        fmt::print(wrappers_file, "}}\n");
++    }
++
+     if (failed_strict_mode) {
+         if (config.single_file_output || config.functions_per_output_file > 1) {
+             current_output_file.close();
+@@ -942,7 +1028,7 @@ int main(int argc, char** argv) {
+ 
+                 for (size_t func_index : section_funcs) {
+                     const auto& func = context.functions[func_index];
+-                    size_t func_size = func.reimplemented ? 0 : func.words.size() * sizeof(func.words[0]);
++                    size_t func_size = func.reimplemented || unhookable_func_indices.contains(func_index) ? 0 : func.words.size() * sizeof(func.words[0]);
+ 
+                     if (func.reimplemented || (!func.name.empty() && !func.ignored && func.words.size() != 0)) {
+                         fmt::print(overlay_file, "    {{ .func = {}, .offset = 0x{:08X}, .rom_size = 0x{:08X} }},\n",
+diff --git a/src/recompilation.cpp b/src/recompilation.cpp
+index b00d143..918b520 100644
+--- a/src/recompilation.cpp
++++ b/src/recompilation.cpp
+@@ -249,10 +249,35 @@ bool process_instruction(GeneratorType& generator, const N64Recomp::Context& con
+         return true;
+     };
+ 
++    // With set_ra_on_calls, a call first sets $ra to its return address as the hardware does: some game routines read
++    // it (Jet Force Gemini's TrapDanglingJump finds its call site from $ra - 8).
++    auto set_ra_for_call = [&]() {
++        if (!context.set_ra_on_calls) {
++            return;
++        }
++        uint32_t return_address = instr_vram + 8;
++        InstructionContext lui_context{};
++        lui_context.rt = 31;
++        lui_context.imm16 = (uint16_t)(return_address >> 16);
++        lui_context.reloc_type = N64Recomp::RelocType::R_MIPS_NONE;
++        print_indent();
++        generator.process_unary_op(N64Recomp::unary_ops.at(InstrId::cpu_lui), lui_context);
++        InstructionContext ori_context{};
++        ori_context.rt = 31;
++        ori_context.rs = 31;
++        ori_context.imm16 = (uint16_t)(return_address & 0xFFFF);
++        ori_context.reloc_type = N64Recomp::RelocType::R_MIPS_NONE;
++        print_indent();
++        generator.process_binary_op(N64Recomp::binary_ops.at(InstrId::cpu_ori), ori_context);
++    };
++
+     auto print_func_call_by_register = [&](int reg, bool tail_call = false) {
+         if (!process_delay_slot(false)) {
+             return false;
+         }
++        if ((reg != 31) && !tail_call) {
++            set_ra_for_call();
++        }
+         print_indent();
+         if (tail_call) {
+             generator.emit_tail_call_start(context);
+@@ -262,7 +287,7 @@ bool process_instruction(GeneratorType& generator, const N64Recomp::Context& con
+         return true;
+     };
+ 
+-    auto print_func_call_by_address = [&generator, reloc_target_section_offset, has_reloc, reloc_section, reloc_reference_symbol, reloc_type, &context, &func, &static_funcs_out, &needs_link_branch, &print_indent, &process_delay_slot, &print_link_branch]
++    auto print_func_call_by_address = [&generator, reloc_target_section_offset, has_reloc, reloc_section, reloc_reference_symbol, reloc_type, &context, &func, &static_funcs_out, &needs_link_branch, &print_indent, &process_delay_slot, &print_link_branch, &set_ra_for_call]
+         (uint32_t target_func_vram, bool tail_call = false, bool indent = false)
+     {
+         bool call_by_lookup = false;
+@@ -341,6 +366,9 @@ bool process_instruction(GeneratorType& generator, const N64Recomp::Context& con
+             if (!process_delay_slot(false)) {
+                 return false;
+             }
++            if (!tail_call) {
++                set_ra_for_call();
++            }
+             print_indent();
+             if (tail_call) {
+                 generator.emit_tail_call_start(context);
+@@ -771,7 +799,7 @@ bool recompile_function_impl(GeneratorType& generator, const N64Recomp::Context&
+     //fmt::print("Recompiling {}\n", func.name);
+     std::vector<rabbitizer::InstructionCpu> instructions;
+ 
+-    generator.emit_function_start(func.name, func_index);
++    generator.emit_function_start(func.definition_name.empty() ? func.name : func.definition_name, func_index);
+ 
+     if (context.trace_mode) {
+         fmt::print(output_file,

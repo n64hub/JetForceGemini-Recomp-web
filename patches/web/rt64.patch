@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index bd6810c..1a8352a 100644
+index 5920c8b..3467592 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -409,6 +409,7 @@ set (SOURCES
+@@ -411,6 +411,7 @@ set (SOURCES
  
      "${PROJECT_SOURCE_DIR}/src/gbi/rt64_gbi.cpp"
      "${PROJECT_SOURCE_DIR}/src/gbi/rt64_gbi_f3d.cpp"
@@ -10,7 +10,7 @@ index bd6810c..1a8352a 100644
      "${PROJECT_SOURCE_DIR}/src/gbi/rt64_gbi_f3dex.cpp"
      "${PROJECT_SOURCE_DIR}/src/gbi/rt64_gbi_f3dex2.cpp"
      "${PROJECT_SOURCE_DIR}/src/gbi/rt64_gbi_f3dgolden.cpp"
-@@ -567,8 +568,11 @@ if (APPLE)
+@@ -575,8 +576,11 @@ if (APPLE)
  
      target_sources(rt64 PRIVATE
          "${PROJECT_SOURCE_DIR}/src/apple/rt64_apple.mm"
@@ -23,7 +23,7 @@ index bd6810c..1a8352a 100644
      target_link_libraries(rt64 "-framework Metal -framework QuartzCore -framework CoreGraphics -framework IOKit")
  endif()
  
-@@ -769,6 +773,16 @@ build_compute_shader(rt64 "src/shaders/HistogramSetCS.hlsl")
+@@ -777,6 +781,16 @@ build_compute_shader(rt64 "src/shaders/HistogramSetCS.hlsl")
  build_compute_shader(rt64 "src/shaders/IdleCS.hlsl")
  build_compute_shader(rt64 "src/shaders/LuminanceHistogramCS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/PostBlendDitherNoisePS.hlsl" "src/shaders/PostBlendDitherNoiseAddPS.hlsl" "-D ADD_MODE")
@@ -40,7 +40,7 @@ index bd6810c..1a8352a 100644
  build_pixel_shader(  rt64 "src/shaders/PostBlendDitherNoisePS.hlsl" "src/shaders/PostBlendDitherNoiseSubPS.hlsl" "-D SUB_MODE")
  build_pixel_shader(  rt64 "src/shaders/PostBlendDitherNoisePS.hlsl" "src/shaders/PostBlendDitherNoiseSubNegativePS.hlsl" "-D SUB_MODE" "-D NEGATIVE_MODE")
  build_compute_shader(rt64 "src/shaders/RSPModifyCS.hlsl")
-@@ -800,4 +814,3 @@ build_pixel_shader(  rt64 "src/shaders/Im3DPS.hlsl")
+@@ -808,4 +822,3 @@ build_pixel_shader(  rt64 "src/shaders/Im3DPS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/PostProcessPS.hlsl")
  
  target_include_directories(rt64 PRIVATE ${CMAKE_BINARY_DIR}/src)
@@ -314,10 +314,10 @@ index 20c0d4d..af126e5 100644
      }
 diff --git a/src/gbi/rt64_gbi_f3ddkr.cpp b/src/gbi/rt64_gbi_f3ddkr.cpp
 new file mode 100644
-index 0000000..7bd989a
+index 0000000..2a4a1f3
 --- /dev/null
 +++ b/src/gbi/rt64_gbi_f3ddkr.cpp
-@@ -0,0 +1,504 @@
+@@ -0,0 +1,507 @@
 +//
 +// RT64 - Diddy Kong Racing's custom Fast3D microcode
 +//
@@ -790,6 +790,9 @@ index 0000000..7bd989a
 +            reset(state);
 +            state->rsp->DKR.jfg = true;
 +            state->rsp->DKR.jfgCullFlip = false;
++            // JFG PORT: not DKR's 8 MB mask: JFG's addresses go through jfgPhysicalAddress (rt64_state.h), so mods can
++            // draw from their own memory (0x81000000 and up).
++            state->rsp->DKR.force8MBAddressMask = false;
 +        }
 +
 +        void setupJFG(GBI *gbi) {
@@ -1630,7 +1633,7 @@ index 629d290..b3a464d 100644
          };
  
 diff --git a/src/hle/rt64_game_frame.cpp b/src/hle/rt64_game_frame.cpp
-index 84e48df..44df012 100644
+index e7c1e32..f88cf05 100644
 --- a/src/hle/rt64_game_frame.cpp
 +++ b/src/hle/rt64_game_frame.cpp
 @@ -3,6 +3,8 @@
@@ -1642,7 +1645,7 @@ index 84e48df..44df012 100644
  
  #include "common/rt64_math.h"
  
-@@ -482,7 +484,31 @@ namespace RT64 {
+@@ -494,7 +496,31 @@ namespace RT64 {
                      prevIt++;
                  }
                  else {
@@ -1675,7 +1678,7 @@ index 84e48df..44df012 100644
                      curIt++;
                      prevIt++;
                  }
-@@ -556,6 +582,70 @@ namespace RT64 {
+@@ -568,6 +594,70 @@ namespace RT64 {
          matchScenes(perspectiveScenes, prevFrame.perspectiveScenes);
          matchScenes(orthographicScenes, prevFrame.orthographicScenes);
  
@@ -1747,10 +1750,10 @@ index 84e48df..44df012 100644
              thread_local std::vector<BufferUploader::Upload> uploads;
              uploads.clear();
 diff --git a/src/hle/rt64_interpreter.cpp b/src/hle/rt64_interpreter.cpp
-index aeae7a6..350560e 100644
+index aeae7a6..3b9cea5 100644
 --- a/src/hle/rt64_interpreter.cpp
 +++ b/src/hle/rt64_interpreter.cpp
-@@ -5,12 +5,397 @@
+@@ -5,12 +5,399 @@
  #include "rt64_interpreter.h"
  
  #include <cassert>
@@ -1811,7 +1814,9 @@ index aeae7a6..350560e 100644
 +
 +            const uintptr_t rdramStart = reinterpret_cast<uintptr_t>(state->RDRAM);
 +            const uintptr_t commandAddress = reinterpret_cast<uintptr_t>(dl);
-+            const uintptr_t rdramEnd = rdramStart + DKRAddressMask + 1U;
++            // JFG PORT: Jet Force Gemini's lists may also be in mod memory (past 16 MB, up to what the runtime commits).
++            const bool jfg = (state->rsp != nullptr) && state->rsp->DKR.jfg;
++            const uintptr_t rdramEnd = rdramStart + (jfg ? JFGAddressableRDRAM : DKRAddressMask + 1U);
 +            if ((commandAddress < rdramStart) || ((commandAddress + sizeof(DisplayList)) > rdramEnd)) {
 +                return 0xFFFFFFFFU;
 +            }
@@ -2148,7 +2153,7 @@ index aeae7a6..350560e 100644
      // Interpreter
  
      Interpreter::Interpreter() {
-@@ -165,11 +550,25 @@ namespace RT64 {
+@@ -165,11 +552,25 @@ namespace RT64 {
          // Check RDRAM if required.
          state->checkRDRAM();
  
@@ -2174,7 +2179,7 @@ index aeae7a6..350560e 100644
              opCode = (dl->w0 >> 24);
  
              if ((extendedOpCode != 0) && (opCode == extendedOpCode)) {
-@@ -199,11 +598,18 @@ namespace RT64 {
+@@ -199,11 +600,18 @@ namespace RT64 {
                  }
              }
  
@@ -2285,7 +2290,7 @@ index c29e4b2..7ab83ad 100644
 \ No newline at end of file
 +};
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 9b4daae..244b912 100644
+index 9b4daae..b17a9c5 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -2,6 +2,10 @@
@@ -2331,7 +2336,15 @@ index 9b4daae..244b912 100644
              Framebuffer *viFb = nullptr;
              if (!viewRDRAM) {
                  viFb = fbManager.find(present.screenVI.fbAddress());
-@@ -254,7 +274,6 @@ namespace RT64 {
+@@ -230,6 +250,7 @@ namespace RT64 {
+ 
+                 RenderTargetKey colorTargetKey(presentFb->addressStart, presentFb->width, presentFb->siz, Framebuffer::Type::Color);
+                 colorTarget = &targetManager.get(colorTargetKey, true);
++                RenderTarget::jfgPresentBegin(colorTarget); // JFG PORT: until this frame is drawn (see jfgPresentBegin)
+                 if (!colorTarget->isEmpty()) {
+                     // If a depth framebuffer is about to be shown, convert it to color.
+                     if (presentFb->isLastWriteDifferent(Framebuffer::Type::Color)) {
+@@ -254,7 +275,6 @@ namespace RT64 {
                  uint32_t fbAddress = present.screenVI.fbAddress();
  
                  // Use a scratch framebuffer to upload the RAM to the render target.
@@ -2339,7 +2352,41 @@ index 9b4daae..244b912 100644
                  scratchFb.addressStart = fbAddress;
                  scratchFb.width = fbSize.x;
                  scratchFb.height = fbSize.y;
-@@ -386,6 +405,25 @@ namespace RT64 {
+@@ -265,6 +285,7 @@ namespace RT64 {
+ 
+                 RenderTargetKey colorTargetKey(fbAddress, scratchFb.width, scratchFb.siz, Framebuffer::Type::Color);
+                 colorTarget = &targetManager.get(colorTargetKey, true);
++                RenderTarget::jfgPresentBegin(colorTarget); // JFG PORT: until this frame is drawn (see jfgPresentBegin)
+                 colorTarget->resize(ext.presentGraphicsWorker, scratchFb.width, scratchFb.height);
+                 colorTarget->resolutionScale = { 1.0f, 1.0f };
+                 colorTarget->downsampleMultiplier = 1;
+@@ -303,6 +324,9 @@ namespace RT64 {
+         for (int32_t i = 0; i < framesToPresent; i++) {
+             uint32_t frameCountersNextPresented = 0;
+             if ((framesToPresent > 1) && (usingMSAA || (i > 0))) {
++                // JFG PORT: the target before is no longer drawn from; the workload queue may need it to make this one.
++                RenderTarget::jfgPresentEnd();
++
+                 // Stall until the interpolated color target is available.
+                 const uint32_t targetIndex = usingMSAA ? i : (i - 1);
+                 PhaseTimer phaseTimer(this, PhaseInterpolated);
+@@ -320,10 +344,12 @@ namespace RT64 {
+                     frameCountersNextPresented = frameCounters.presented + 1;
+                 }
+ 
+-                if (i < framesToPresent) {
+-                    uint32_t targetIndex = usingMSAA ? i : (i - 1);
+-                    const auto &interpolatedTargets = ext.sharedResources->interpolatedColorTargets;
++                // JFG PORT: marked as drawn from while the lock is held, so it can't be released in between (jfgPresentBegin);
++                // the list is emptied when the screen size changes.
++                const auto &interpolatedTargets = ext.sharedResources->interpolatedColorTargets;
++                if ((i < framesToPresent) && !interpolatedTargets.empty()) {
+                     colorTarget = interpolatedTargets[targetIndex % interpolatedTargets.size()].get();
++                    RenderTarget::jfgPresentBegin(colorTarget);
+                 }
+                 else {
+                     colorTarget = nullptr;
+@@ -386,6 +412,25 @@ namespace RT64 {
                      viRenderer->render(renderParams);
                  }
  
@@ -2365,7 +2412,16 @@ index 9b4daae..244b912 100644
                  RenderHookDraw *drawHook = GetRenderHookDraw();
                  if (drawHook != nullptr) {
                      drawHook(commandList, swapChainFramebuffer);
-@@ -476,6 +514,28 @@ namespace RT64 {
+@@ -408,6 +453,8 @@ namespace RT64 {
+             }
+ 
+             drawTimer.reset();
++            RenderTarget::jfgPresentEnd(); // JFG PORT: see jfgPresentBegin
++
+             if (lockedWorkloadMutex) {
+                 ext.sharedResources->workloadMutex.unlock();
+                 lockedWorkloadMutex = false;
+@@ -476,6 +523,28 @@ namespace RT64 {
                  presentTimestamp = Timer::current();
                  PhaseTimer phaseTimer(this, PhasePresent);
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
@@ -2394,7 +2450,7 @@ index 9b4daae..244b912 100644
                  presentProfiler.logAndRestart();
              }
          }
-@@ -803,7 +863,7 @@ namespace RT64 {
+@@ -803,7 +872,7 @@ namespace RT64 {
                  Present &present = presents[processCursor];
                  {
                      PhaseTimer phaseTimer(this, PhaseWorkload);
@@ -2404,7 +2460,7 @@ index 9b4daae..244b912 100644
  
                  if (!presentThreadRunning) {
 diff --git a/src/hle/rt64_rdp.cpp b/src/hle/rt64_rdp.cpp
-index f6072e1..f535d9a 100644
+index f6072e1..10d9a34 100644
 --- a/src/hle/rt64_rdp.cpp
 +++ b/src/hle/rt64_rdp.cpp
 @@ -4,7 +4,9 @@
@@ -2455,7 +2511,19 @@ index f6072e1..f535d9a 100644
              fbManager.insertRegionsTMEM(fb->addressStart, tmemStart, std::min(tmemWords, uint32_t(RDP_TMEM_WORDS)), tmemMask, RGBA32, syncRequired, couldMakeTile ? &regionIterators : nullptr);
              
              if (couldMakeTile) {
-@@ -304,6 +330,7 @@ namespace RT64 {
+@@ -295,7 +321,10 @@ namespace RT64 {
+     constexpr uint32_t ExtendedMask = 0x80000000U;
+ 
+     uint32_t RDP::maskAddress(uint32_t address) {
+-        if (state->extended.extendRDRAM && ((address & ExtendedMask) == ExtendedMask)) {
++        if (state->rsp->DKR.jfg) {
++            return jfgPhysicalAddress(address, RDP_ADDRESS_MASK); // JFG PORT: game and mod memory, see rt64_state.h
++        }
++        else if (state->extended.extendRDRAM && ((address & ExtendedMask) == ExtendedMask)) {
+             return address - ExtendedMask;
+         }
+         else {
+@@ -304,6 +333,7 @@ namespace RT64 {
      }
  
      void RDP::setColorImage(uint8_t fmt, uint8_t siz, uint16_t width, uint32_t address) {
@@ -2463,7 +2531,7 @@ index f6072e1..f535d9a 100644
          // Make sure the new color image is actually different. Some games will set the color image
          // multiple times despite setting the exact same parameters.
          const uint32_t newAddress = maskAddress(address);
-@@ -544,6 +571,11 @@ namespace RT64 {
+@@ -544,6 +574,11 @@ namespace RT64 {
      }
  
      void RDP::loadTileOperation(const LoadTile &loadTile, const LoadTexture &loadTexture, bool deferred) {
@@ -2475,7 +2543,7 @@ index f6072e1..f535d9a 100644
          const uint32_t bytesOffset = (loadTile.uls >> 2) << loadTexture.siz >> 1;
          const uint32_t bytesPerRow = loadTexture.width << loadTexture.siz >> 1;
          const uint32_t textureStart = loadTexture.address + bytesOffset + bytesPerRow * (loadTile.ult >> 2);
-@@ -583,6 +615,11 @@ namespace RT64 {
+@@ -583,6 +618,11 @@ namespace RT64 {
      }
  
      void RDP::loadBlockOperation(const LoadTile &loadTile, const LoadTexture &loadTexture, bool deferred) {
@@ -2487,7 +2555,7 @@ index f6072e1..f535d9a 100644
          // Deduce loading parameters for block and the texture address.
          const uint32_t bytesOffset = loadTile.uls << loadTexture.siz >> 1;
          const uint32_t bytesPerRow = loadTexture.width << loadTexture.siz >> 1;
-@@ -619,6 +656,11 @@ namespace RT64 {
+@@ -619,6 +659,11 @@ namespace RT64 {
      }
  
      void RDP::loadTLUTOperation(const LoadTile &loadTile, const LoadTexture &loadTexture, bool deferred) {
@@ -2499,7 +2567,7 @@ index f6072e1..f535d9a 100644
          // Deduce loading parameters for TLUT and the texture address.
          const uint32_t bytesOffset = (loadTile.uls >> 2) << loadTexture.siz >> 1;
          const uint32_t bytesPerRow = loadTexture.width << loadTexture.siz >> 1;
-@@ -670,14 +712,15 @@ namespace RT64 {
+@@ -670,14 +715,15 @@ namespace RT64 {
          t.lrt = lrt;
  
          // Ignored by the hardware.
@@ -2517,7 +2585,7 @@ index f6072e1..f535d9a 100644
          assert((t.siz == texture.siz) && "Different tile and texture sizes are not currently supported.");
          assert((texture.siz != G_IM_SIZ_4b) && "4-bit texture image is not currently supported.");
          assert((t.fmt != G_IM_FMT_YUV) && "YUV is not currently supported.");
-@@ -722,7 +765,7 @@ namespace RT64 {
+@@ -722,7 +768,7 @@ namespace RT64 {
          assert(tile < RDP_TILES);
  
          // Ignored by the hardware.
@@ -2526,7 +2594,7 @@ index f6072e1..f535d9a 100644
              return false;
          }
  
-@@ -760,7 +803,7 @@ namespace RT64 {
+@@ -760,7 +806,7 @@ namespace RT64 {
          assert(tile < RDP_TILES);
  
          // Ignored by the hardware.
@@ -2535,7 +2603,7 @@ index f6072e1..f535d9a 100644
              return false;
          }
  
-@@ -799,7 +842,12 @@ namespace RT64 {
+@@ -799,7 +845,12 @@ namespace RT64 {
          t.lrt = dxt;
  
          // Ignored by the hardware.
@@ -2549,7 +2617,7 @@ index f6072e1..f535d9a 100644
              return;
          }
          
-@@ -857,6 +905,11 @@ namespace RT64 {
+@@ -857,6 +908,11 @@ namespace RT64 {
          t.lrs = lrs;
          t.lrt = lrt;
  
@@ -2561,7 +2629,7 @@ index f6072e1..f535d9a 100644
  #   ifdef ASSERT_LOAD_METHODS
          assert((texture.siz == G_IM_SIZ_16b) && "Non-16 bit textures are not currently supported.");
          assert((t.siz == G_IM_SIZ_4b) && "Non-4 bit tiles are not currently supported.");
-@@ -1134,6 +1187,10 @@ namespace RT64 {
+@@ -1134,6 +1190,10 @@ namespace RT64 {
          extended.global.rectAspect = aspect;
      }
  
@@ -2572,7 +2640,7 @@ index f6072e1..f535d9a 100644
      void RDP::forceUpscale2D(bool force) {
          extended.drawExtendedFlags.forceUpscale2D = force;
          state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
-@@ -1156,6 +1213,7 @@ namespace RT64 {
+@@ -1156,6 +1216,7 @@ namespace RT64 {
          extended.global.rect = ExtendedAlignment();
          extended.global.scissor = ExtendedAlignment();
          extended.global.rectAspect = G_EX_ASPECT_AUTO;
@@ -2580,7 +2648,7 @@ index f6072e1..f535d9a 100644
      }
      
      void RDP::drawTris(uint32_t triCount, const float *pos, const float *tc, const float *col, uint8_t tile, uint8_t levels) {
-@@ -1308,9 +1366,12 @@ namespace RT64 {
+@@ -1308,9 +1369,12 @@ namespace RT64 {
          drawCall.rect = drawRect;
          drawCall.rectDsdx = dsdx;
          drawCall.rectDtdy = dtdy;
@@ -2614,7 +2682,7 @@ index 84f4e7c..5ecaf70 100644
          void forceTrueBilerp(uint8_t mode);
          void forceScaleLOD(bool force);
 diff --git a/src/hle/rt64_rdp_tmem.cpp b/src/hle/rt64_rdp_tmem.cpp
-index f719325..2420c5a 100644
+index f719325..9824e09 100644
 --- a/src/hle/rt64_rdp_tmem.cpp
 +++ b/src/hle/rt64_rdp_tmem.cpp
 @@ -6,14 +6,24 @@
@@ -2660,7 +2728,7 @@ index f719325..2420c5a 100644
              }
          }
  
-@@ -79,19 +90,271 @@ namespace RT64 {
+@@ -79,19 +90,298 @@ namespace RT64 {
  
          // Dump memory contents into a file if the process is active.
          if (!state->dumpingTexturesDirectory.empty()) {
@@ -2750,7 +2818,7 @@ index f719325..2420c5a 100644
 +        const uint64_t DynamicWindowFrames = 30;
 +    };
 +
-+    bool TextureManager::dumpSourceIsDynamic(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, uint64_t creationFrame, DumpSource *&source) {
++    bool TextureManager::dumpSourceIsDynamic(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, uint64_t creationFrame, const std::filesystem::path &directory, DumpSource *&source) {
 +        const LoadOperation &loadOp = state->rdp->rice.lastLoadOpByTMEM[loadTile.tmem];
 +        const DumpSourceKey key(loadOp.texture.address, loadTile.fmt, loadTile.siz, width, height, tlut, loadTile.palette);
 +        auto inserted = dumpSources.emplace(key, DumpSource());
@@ -2787,14 +2855,15 @@ index f719325..2420c5a 100644
 +
 +        // Flagged: move what was already written aside (not deleted, so a false positive can be undone) and log why.
 +        src.dynamic = true;
-+        const std::filesystem::path dynamicDirectory = state->dumpingTexturesDirectory / "_dynamic";
++        const std::filesystem::path dynamicDirectory = directory / "_dynamic";
 +        std::error_code ec;
 +        std::filesystem::create_directories(dynamicDirectory, ec);
 +        for (const std::filesystem::path &path : src.written) {
-+            std::filesystem::rename(path, dynamicDirectory / path.filename(), ec);
++            std::filesystem::create_directories(path.parent_path() / "_dynamic", ec);
++            std::filesystem::rename(path, path.parent_path() / "_dynamic" / path.filename(), ec);
 +        }
 +
-+        FILE *log = fopen((state->dumpingTexturesDirectory / "dynamic_sources.txt").u8string().c_str(), "ab");
++        FILE *log = fopen((directory / "dynamic_sources.txt").u8string().c_str(), "ab");
 +        if (log != nullptr) {
 +            fprintf(log, "address %08x size %ux%u fmt %u siz %u tlut %u palette %u: %zu+ distinct textures, first frame %" PRIu64 ", flagged frame %" PRIu64 ", %zu files moved to _dynamic\n",
 +                loadOp.texture.address, width, height, loadTile.fmt, loadTile.siz, tlut, loadTile.palette, src.hashes.size(), src.firstFrame, creationFrame, src.written.size());
@@ -2805,7 +2874,7 @@ index f719325..2420c5a 100644
 +        return true;
 +    }
 +
-+    bool TextureManager::dumpTexturePng(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, std::filesystem::path &path) {
++    bool TextureManager::dumpTexturePng(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, const std::filesystem::path &directory, std::filesystem::path &path) {
 +        const uint32_t stride = uint32_t(loadTile.line) << 3;
 +        if ((width == 0) || (height == 0) || (width > 1024) || (height > 1024) || (stride == 0)) {
 +            return false;
@@ -2857,7 +2926,7 @@ index f719325..2420c5a 100644
 +
 +        char name[64];
 +        snprintf(name, sizeof(name), "%016" PRIx64 ".png", hash);
-+        path = state->dumpingTexturesDirectory / name;
++        path = directory / name;
 +        const std::string pathString = path.u8string();
 +        if (stbi_write_png(pathString.c_str(), width, height, 4, pixels.data(), int(width) * 4) == 0) {
 +            return false;
@@ -2871,7 +2940,7 @@ index f719325..2420c5a 100644
 +        const char *tlutName = (tlut == G_TT_RGBA16) ? "rgba16" : ((tlut == G_TT_IA16) ? "ia16" : "none");
 +        const bool CI4 = (loadTile.fmt == G_IM_FMT_CI) && (loadTile.siz == G_IM_SIZ_4b);
 +        const uint32_t src = state->rdp->rice.lastLoadOpByTMEM[loadTile.tmem].texture.address;
-+        FILE *info = fopen((state->dumpingTexturesDirectory / "texture_info.txt").u8string().c_str(), "ab");
++        FILE *info = fopen((directory / "texture_info.txt").u8string().c_str(), "ab");
 +        if (info != nullptr) {
 +            fprintf(info, "tex %016" PRIx64 " fmt %s siz %u tlut %s pal %u line %u src %08x", hash, fmtName, 4U << loadTile.siz, tlutName, CI4 ? uint32_t(loadTile.palette) : 0U, uint32_t(loadTile.line), src);
 +            if ((loadTile.fmt == G_IM_FMT_CI) && (tlut > 0)) {
@@ -2886,16 +2955,41 @@ index f719325..2420c5a 100644
 +        return true;
 +    }
 +
++    // JFG PORT: where a texture's PNG goes: the folder the host gives for the RDRAM address it was loaded from (a mod's
++    // own texture, so a texture pack made from the dump keeps the game's textures apart from each mod's), else the dump
++    // folder. Each folder has its own _dynamic, texture_info.txt and dynamic_sources.txt.
++    std::filesystem::path TextureManager::dumpDirectory(State *state, const LoadTile &loadTile) {
++        if (!state->dumpingTexturesPng || !state->dumpingTexturesDirectoryFor) {
++            return state->dumpingTexturesDirectory;
++        }
++
++        const uint32_t src = state->rdp->rice.lastLoadOpByTMEM[loadTile.tmem].texture.address;
++        const std::filesystem::path directory = state->dumpingTexturesDirectoryFor(src);
++        if (directory.empty()) {
++            return state->dumpingTexturesDirectory;
++        }
++
++        if (dumpScannedDirectories.insert(directory).second) {
++            std::error_code ec;
++            std::filesystem::create_directories(directory, ec);
++            scanDumped(directory);
++        }
++
++        return directory;
++    }
++
 +    void TextureManager::resetDump(const std::filesystem::path &directory) {
 +        dumpedSet.clear();
 +        dumpSources.clear();
-+
-+        // JFG PORT: a dump continued in a folder that already holds PNGs (a new session) does not write those textures,
-+        // or their texture_info.txt lines, again. Their names start with the hash, in the folder or _dynamic/.
-+        if (directory.empty()) {
-+            return;
++        dumpScannedDirectories.clear();
++        if (!directory.empty()) {
++            scanDumped(directory);
 +        }
++    }
 +
++    // JFG PORT: a dump continued in a folder that already holds PNGs (a new session) does not write those textures, or
++    // their texture_info.txt lines, again. Their names start with the hash, in the folder or _dynamic/.
++    void TextureManager::scanDumped(const std::filesystem::path &directory) {
 +        std::error_code ec;
 +        for (const std::filesystem::path &folder : { directory, directory / "_dynamic" }) {
 +            for (std::filesystem::directory_iterator it(folder, ec), end; !ec && (it != end); it.increment(ec)) {
@@ -2910,7 +3004,8 @@ index f719325..2420c5a 100644
 +    void TextureManager::dumpTexture(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, uint64_t creationFrame, bool savePNG) {
 +        // JFG PORT: textures the game redraws on most frames are not dumped (see dumpSourceIsDynamic). Only for PNG dumps.
 +        DumpSource *source = nullptr;
-+        if (state->dumpingTexturesPng && state->dumpingTexturesSkipDynamic && dumpSourceIsDynamic(hash, state, loadTile, width, height, tlut, creationFrame, source)) {
++        const std::filesystem::path directory = dumpDirectory(state, loadTile);
++        if (state->dumpingTexturesPng && state->dumpingTexturesSkipDynamic && dumpSourceIsDynamic(hash, state, loadTile, width, height, tlut, creationFrame, directory, source)) {
 +            return;
 +        }
 +
@@ -2925,7 +3020,7 @@ index f719325..2420c5a 100644
 +        // what the "rt64" auto path of a replacement database matches on.
 +        if (state->dumpingTexturesPng) {
 +            std::filesystem::path path;
-+            if (dumpTexturePng(hash, state, loadTile, width, height, tlut, path) && (source != nullptr)) {
++            if (dumpTexturePng(hash, state, loadTile, width, height, tlut, directory, path) && (source != nullptr)) {
 +                source->written.push_back(path);
 +            }
 +
@@ -2934,7 +3029,7 @@ index f719325..2420c5a 100644
          
          // Dump the entirety of TMEM.
          char baseName[64];
-@@ -104,6 +367,17 @@ namespace RT64 {
+@@ -104,6 +394,17 @@ namespace RT64 {
              dumpTmemStream.close();
          }
  
@@ -2953,7 +3048,7 @@ index f719325..2420c5a 100644
          const LoadOperation &loadOp = state->rdp->rice.lastLoadOpByTMEM[loadTile.tmem];
          uint32_t rdramStart = loadOp.texture.address;
 diff --git a/src/hle/rt64_rdp_tmem.h b/src/hle/rt64_rdp_tmem.h
-index 3708220..1a744a0 100644
+index 3708220..f9809f5 100644
 --- a/src/hle/rt64_rdp_tmem.h
 +++ b/src/hle/rt64_rdp_tmem.h
 @@ -4,7 +4,11 @@
@@ -2968,7 +3063,7 @@ index 3708220..1a744a0 100644
  
  #include "hle/rt64_draw_call.h"
  #include "render/rt64_texture_cache.h"
-@@ -13,13 +17,31 @@ namespace RT64 {
+@@ -13,13 +17,34 @@ namespace RT64 {
      struct State;
  
      struct TextureManager {
@@ -2989,21 +3084,24 @@ index 3708220..1a744a0 100644
          std::set<uint64_t> dumpedSet;
 +        std::vector<uint32_t> dumpRGBAPixels;
 +        std::map<DumpSourceKey, DumpSource> dumpSources; // JFG PORT
++        std::set<std::filesystem::path> dumpScannedDirectories; // JFG PORT: the host's folders whose PNGs are in dumpedSet
  
          void uploadEmpty(State *state, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint64_t replacementHash);
          uint64_t uploadTMEM(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t byteOffset, uint16_t byteCount, uint16_t width, uint16_t height, uint32_t tlut);
          uint64_t uploadTexture(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint32_t tlut);
 -        void dumpTexture(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut);
 +        void dumpTexture(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, uint64_t creationFrame, bool savePNG);
-+        bool dumpSourceIsDynamic(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, uint64_t creationFrame, DumpSource *&source); // JFG PORT
-+        bool dumpTexturePng(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, std::filesystem::path &path); // JFG PORT
++        bool dumpSourceIsDynamic(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, uint64_t creationFrame, const std::filesystem::path &directory, DumpSource *&source); // JFG PORT
++        bool dumpTexturePng(uint64_t hash, State *state, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut, const std::filesystem::path &directory, std::filesystem::path &path); // JFG PORT
++        std::filesystem::path dumpDirectory(State *state, const LoadTile &loadTile); // JFG PORT
++        void scanDumped(const std::filesystem::path &directory); // JFG PORT
 +        void resetDump(const std::filesystem::path &directory); // JFG PORT
          void removeHashes(const std::vector<uint64_t> &hashes);
      };
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_rsp.cpp b/src/hle/rt64_rsp.cpp
-index f8b97c4..85a3a18 100644
+index f8b97c4..b8ab85d 100644
 --- a/src/hle/rt64_rsp.cpp
 +++ b/src/hle/rt64_rsp.cpp
 @@ -4,7 +4,12 @@
@@ -3180,28 +3278,36 @@ index f8b97c4..85a3a18 100644
  
          clearExtended();
      }
-@@ -98,7 +250,10 @@ namespace RT64 {
+@@ -98,7 +250,13 @@ namespace RT64 {
  
      // Masks addresses as the RSP DMA hardware would.
      template<uint32_t mask> uint32_t RSP::maskPhysicalAddress(uint32_t address) {
 -        if (state->extended.extendRDRAM && ((address & ExtendedMask) == ExtendedMask)) {
-+        if (DKR.force8MBAddressMask) {
++        if (DKR.jfg) {
++            return jfgPhysicalAddress(address, mask); // JFG PORT: game and mod memory, see rt64_state.h
++        }
++        else if (DKR.force8MBAddressMask) {
 +            return address & mask & DKRAddressMask;
 +        }
 +        else if (state->extended.extendRDRAM && ((address & ExtendedMask) == ExtendedMask)) {
              return address - ExtendedMask;
          }
          else {
-@@ -108,7 +263,7 @@ namespace RT64 {
+@@ -108,7 +266,12 @@ namespace RT64 {
  
      // Performs a lookup in the segment table to convert the given address.
      uint32_t RSP::fromSegmented(uint32_t segAddress) {
 -        if (state->extended.extendRDRAM && ((segAddress & ExtendedMask) == ExtendedMask)) {
-+        if (!DKR.force8MBAddressMask && state->extended.extendRDRAM && ((segAddress & ExtendedMask) == ExtendedMask)) {
++        // JFG PORT: a KSEG pointer past the first 16 MB (mod memory, from 0x81000000) is an address, not segment + offset:
++        // its physical address. Below 16 MB (the game's memory) the segment table is used as before.
++        if (DKR.jfg && ((segAddress & 0x80000000U) != 0) && ((segAddress & 0x1F000000U) != 0)) {
++            return segAddress & (JFGAddressableRDRAM - 1);
++        }
++        else if (!DKR.force8MBAddressMask && state->extended.extendRDRAM && ((segAddress & ExtendedMask) == ExtendedMask)) {
              return segAddress;
          }
          else {
-@@ -207,6 +362,382 @@ namespace RT64 {
+@@ -207,6 +370,382 @@ namespace RT64 {
          matrixCommon(floatMatrix, address, params);
      }
  
@@ -3584,7 +3690,7 @@ index f8b97c4..85a3a18 100644
      void RSP::popMatrix(uint32_t count) {
          while (count--) {
              if (modelMatrixStackSize > 1) {
-@@ -375,6 +906,111 @@ namespace RT64 {
+@@ -375,6 +914,111 @@ namespace RT64 {
          memcpy(&vertices[dstIndex], dlVerts, sizeof(Vertex) * vtxCount);
          setVertexCommon<true, sizeof(Vertex)>(rdramAddress, dstIndex, dstIndex + vtxCount);
      }
@@ -3696,7 +3802,7 @@ index f8b97c4..85a3a18 100644
      
      void RSP::setVertexPD(uint32_t address, uint32_t vtxCount, uint32_t dstIndex) {
          if ((dstIndex >= RSP_MAX_VERTICES) || ((dstIndex + vtxCount) > RSP_MAX_VERTICES)) {
-@@ -760,28 +1396,58 @@ namespace RT64 {
+@@ -760,28 +1404,58 @@ namespace RT64 {
              auto &worldIndices = workload.drawData.worldIndices;
              auto &posTransformed = workload.drawData.posTransformed;
              const uint32_t newIndex = workload.drawData.vertexCount();
@@ -3777,7 +3883,7 @@ index f8b97c4..85a3a18 100644
              indices[dstIndex] = newIndex;
              used[dstIndex] = false;
              globalIndex = indices[dstIndex];
-@@ -885,9 +1551,11 @@ namespace RT64 {
+@@ -885,9 +1559,11 @@ namespace RT64 {
  
      void RSP::modifyGeometryMode(uint32_t offMask, uint32_t onMask) {
          uint32_t &geometryMode = geometryModeStack[geometryModeStackSize - 1];
@@ -3792,7 +3898,7 @@ index f8b97c4..85a3a18 100644
      }
  
      void RSP::setObjRenderMode(uint32_t value) {
-@@ -910,6 +1578,15 @@ namespace RT64 {
+@@ -910,6 +1586,15 @@ namespace RT64 {
          viewport.translate.y = float(vp->vtrans[0] + offy) / 4.0f;
          viewport.translate.z = float(vp->vtrans[3]) / DepthRange;
          extended.viewportOriginStack[viewportStackSize - 1] = ori;
@@ -3808,7 +3914,7 @@ index f8b97c4..85a3a18 100644
          viewportChanged = true;
      }
  
-@@ -1197,7 +1874,12 @@ namespace RT64 {
+@@ -1197,7 +1882,12 @@ namespace RT64 {
              drawRect = viewportClipRect.intersection(scissorRect.intersection(drawRect));
              if (!drawRect.isNull()) {
                  fbPair.drawColorRect.merge(drawRect);
@@ -3927,7 +4033,7 @@ index a9417c7..154ceb4 100644
          // Whether a present is showing these counters' targets (PresentQueue::threadPresent()). A present waits for the
          // last workload that drew what it shows (State::advancePresent()), not the newest, so it can start after the next
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
-index bd798d4..a1c1f4f 100644
+index 4a8bf75..73af097 100644
 --- a/src/hle/rt64_state.cpp
 +++ b/src/hle/rt64_state.cpp
 @@ -6,6 +6,10 @@
@@ -4142,7 +4248,7 @@ index bd798d4..a1c1f4f 100644
              auto &colorImg = fbPair.colorImage;
              auto &depthImg = fbPair.depthImage;
              uint32_t colorHeight = fbPair.drawColorRect.bottom(true);
-+            if (rsp->DKR.force8MBAddressMask && (colorImg.width == 320)) {
++            if ((rsp->DKR.force8MBAddressMask || rsp->DKR.jfg) && (colorImg.width == 320)) { // JFG PORT: JFG too (its own address handling)
 +                // NTSC DKR framebuffers are 320x240. A torn dynamic display
 +                // list can briefly supply garbage rectangle bounds; never let
 +                // that turn into a framebuffer write over the adjacent game
@@ -4460,21 +4566,21 @@ index bd798d4..a1c1f4f 100644
                          ext.rasterShaderCache->submit(shaderDesc);
                      }
  
-@@ -1399,6 +1830,9 @@ namespace RT64 {
+@@ -1415,6 +1846,9 @@ namespace RT64 {
                      const auto &colorImg = fbPair.colorImage;
                      const auto &depthImg = fbPair.depthImage;
                      colorHeight = fbPair.drawColorRect.bottom(true);
-+                    if (rsp->DKR.force8MBAddressMask && (colorImg.width == 320)) {
++                    if ((rsp->DKR.force8MBAddressMask || rsp->DKR.jfg) && (colorImg.width == 320)) { // JFG PORT: JFG too (its own address handling)
 +                        colorHeight = std::min(colorHeight, 240U);
 +                    }
                      colorWriteWidth = (colorHeight > 1) ? colorImg.width : std::min(fbPair.drawColorRect.right(true), int32_t(colorImg.width));
                      depthWriteWidth = 0;
                      colorFb = &framebufferManager.get(colorImg.address, colorImg.siz, colorImg.width, colorHeight);
-@@ -1421,6 +1855,13 @@ namespace RT64 {
+@@ -1437,6 +1871,13 @@ namespace RT64 {
                          depthRowEnd = fbPair.drawDepthRect.bottom(true);
                      }
  
-+                    if (rsp->DKR.force8MBAddressMask && (colorImg.width == 320)) {
++                    if ((rsp->DKR.force8MBAddressMask || rsp->DKR.jfg) && (colorImg.width == 320)) { // JFG PORT: JFG too (its own address handling)
 +                        colorRowStart = std::min(colorRowStart, 240U);
 +                        colorRowEnd = std::min(colorRowEnd, 240U);
 +                        depthRowStart = std::min(depthRowStart, 240U);
@@ -4484,7 +4590,7 @@ index bd798d4..a1c1f4f 100644
                      return true;
                  }
                  else {
-@@ -1714,6 +2155,11 @@ namespace RT64 {
+@@ -1730,6 +2171,11 @@ namespace RT64 {
                      }
                      else {
                          fb->copyNativeToRAM(&RDRAM[fb->addressStart], rowWidth, rowStart, rowEnd);
@@ -4496,7 +4602,7 @@ index bd798d4..a1c1f4f 100644
                      }
                  };
  
-@@ -2150,6 +2596,13 @@ namespace RT64 {
+@@ -2166,6 +2612,13 @@ namespace RT64 {
  
          const bool presentEarly = !ext.presentQueue->viewRDRAM && (ext.enhancementConfig->presentation.mode == EnhancementConfiguration::Presentation::Mode::PresentEarly);
          const uint32_t screenFbAddress = newVI.fbAddress();
@@ -4510,7 +4616,7 @@ index bd798d4..a1c1f4f 100644
          const hlslpp::uint2 screenFbSize = newVI.fbSize();
          const uint8_t screenFbSiz = newVI.fbSiz();
          const bool viVisible = newVI.visible();
-@@ -2536,6 +2989,7 @@ namespace RT64 {
+@@ -2552,6 +3005,7 @@ namespace RT64 {
                  }
  
                  if (ImGui::BeginTabItem("Textures")) {
@@ -4518,7 +4624,7 @@ index bd798d4..a1c1f4f 100644
                      for (const ReplacementDirectory &replacementDirectory : ext.textureCache->textureMap.replacementMap.replacementDirectories) {
                          const std::string replacementPath = replacementDirectory.dirOrZipPath.u8string();
                          ImGui::Text("Texture replacement path: %s", replacementPath.c_str());
-@@ -2571,36 +3025,52 @@ namespace RT64 {
+@@ -2587,36 +3041,52 @@ namespace RT64 {
                      ImGui::BeginChild("##textureReplacements", ImVec2(0, -64));
                      ImGui::EndChild();
  
@@ -4591,7 +4697,7 @@ index bd798d4..a1c1f4f 100644
                      }
  
                      if (ext.textureCache->textureMap.replacementMap.fileSystemIsDirectory) {
-@@ -2619,39 +3089,43 @@ namespace RT64 {
+@@ -2635,39 +3105,43 @@ namespace RT64 {
                          }
                      }
  
@@ -4663,7 +4769,7 @@ index bd798d4..a1c1f4f 100644
                      }
  
                      ImGui::EndTabItem();
-@@ -2737,17 +3211,17 @@ namespace RT64 {
+@@ -2753,17 +3227,17 @@ namespace RT64 {
                          const auto &screenApiProfiler = *ext.screenApiProfiler;
                          ImPlot::SetupAxisLimits(ImAxis_Y1, 0.0, FrametimeLimit);
                          ImPlot::SetupAxis(ImAxis_Y1, "ms", ImPlotAxisFlags_AutoFit);
@@ -4691,17 +4797,20 @@ index bd798d4..a1c1f4f 100644
                          ImPlot::EndPlot();
                          
                          const double averagePresent = presentProfiler.average();
-@@ -3140,6 +3614,9 @@ namespace RT64 {
+@@ -3188,6 +3662,12 @@ namespace RT64 {
      }
  
      uint8_t *State::fromRDRAM(uint32_t rdramAddress) const {
-+        if ((rsp != nullptr) && rsp->DKR.force8MBAddressMask) {
++        if ((rsp != nullptr) && rsp->DKR.jfg) {
++            rdramAddress &= (JFGAddressableRDRAM - 1); // JFG PORT: game and mod memory; never past what the runtime commits
++        }
++        else if ((rsp != nullptr) && rsp->DKR.force8MBAddressMask) {
 +            rdramAddress &= DKRAddressMask;
 +        }
          return &RDRAM[rdramAddress];
      }
  
-@@ -3182,4 +3659,4 @@ namespace RT64 {
+@@ -3230,4 +3710,4 @@ namespace RT64 {
              break;
          }
      }
@@ -4709,10 +4818,39 @@ index bd798d4..a1c1f4f 100644
 \ No newline at end of file
 +};
 diff --git a/src/hle/rt64_state.h b/src/hle/rt64_state.h
-index 7cbc85a..0668b31 100644
+index 7cbc85a..d0b3833 100644
 --- a/src/hle/rt64_state.h
 +++ b/src/hle/rt64_state.h
-@@ -70,6 +70,11 @@ namespace RT64 {
+@@ -5,6 +5,7 @@
+ #pragma once
+ 
+ #include <atomic>
++#include <functional>
+ 
+ #include "xxHash/xxh3.h"
+ 
+@@ -40,6 +41,20 @@ namespace RT64 {
+     
+     const uint32_t RDRAMSize = 0x7FFFFF;
+ 
++    // JFG PORT: the RDRAM a recompiled game and its mods can address: the runtime commits 512 MB (KSEG0's size, librecomp
++    // recomp::mem_size), game memory first, then mod code, data and the mod heap from 0x81000000.
++    const uint32_t JFGAddressableRDRAM = 0x20000000U;
++
++    // JFG PORT: an address from Jet Force Gemini (or one of its mods) to a physical RDRAM offset: the hardware DMA mask
++    // (its low bits keep the alignment the game relies on), widened from 16 MB to the 512 MB the runtime commits. KSEG0 and
++    // KSEG1 pointers (0x80000000 / 0xA0000000 and up) lose their KSEG bits on the way, as on hardware. For the game's
++    // memory this gives the same addresses as DKR's 8 MB mask did; past 8 MB (mod code, data and heap from 0x81000000)
++    // it no longer wraps into the game's memory. No extended mode is needed (RT64's would take KSEG1 pointers as
++    // extended addresses).
++    inline uint32_t jfgPhysicalAddress(uint32_t address, uint32_t mask) {
++        return address & (mask | ((JFGAddressableRDRAM - 1) & ~0x00FFFFFFU));
++    }
++
+     struct State {
+         struct External {
+             Application *app;
+@@ -70,6 +85,11 @@ namespace RT64 {
  
          uint8_t *RDRAM;
  
@@ -4724,17 +4862,18 @@ index 7cbc85a..0668b31 100644
          // Optional (the runtime's, or nullptr): [0] counts the display lists the runtime has had read in full, and the
          // interpreter stores in [1 + offset / 256], for each 256 bytes of RDRAM's first 8 MB it reads a command from, the
          // number of the list it is reading ([0] + 1), so the runtime can hold a load from ROM that would land on commands
-@@ -168,6 +173,9 @@ namespace RT64 {
+@@ -168,6 +188,10 @@ namespace RT64 {
          ProfilingTimer screenCpuProfiler = ProfilingTimer(120);
          ProfilingTimer viChangedProfiler = ProfilingTimer(120);
          std::filesystem::path dumpingTexturesDirectory;
 +        bool dumpingTexturesPng = false; // JFG PORT: dump each texture as <hash>.png only (decoded from TMEM), ready for a replacement pack, and log draw_trace.txt
 +        bool dumpingTexturesSkipDynamic = true; // JFG PORT: stop dumping sources that change on most frames (dynamic_sources.txt)
++        std::function<std::filesystem::path(uint32_t)> dumpingTexturesDirectoryFor; // JFG PORT: the host's folder for a texture loaded from this RDRAM address (a mod's own), empty for the dump folder
 +        std::string traceScene = "unknown"; // JFG PORT: the level or screen on screen, set by the host before each display list; stamped on every draw_trace.txt line
          bool configurationSaveQueued = false;
          uint64_t workloadId = 0;
          uint64_t presentId = 0;
-@@ -187,6 +195,20 @@ namespace RT64 {
+@@ -187,6 +211,20 @@ namespace RT64 {
  
          Extended extended;
  
@@ -4850,7 +4989,7 @@ index 589d7eb..3a44342 100644
          std::vector<DrawCallTile> callTiles;
          std::vector<interop::RSPViewport> rspViewports;
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 4309c86..bead732 100644
+index c22b2e6..566bbb8 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -2,6 +2,11 @@
@@ -4959,7 +5098,24 @@ index 4309c86..bead732 100644
              }
  
              std::scoped_lock<std::mutex> managerLock(ext.sharedResources->managerMutex);
-@@ -1076,7 +1105,7 @@ namespace RT64 {
+@@ -513,7 +542,15 @@ namespace RT64 {
+             targetManager.destroyAll();
+             fbManager.destroyAllTileCopies();
+             ext.sharedResources->fbConfigChanged = false;
+-            ext.sharedResources->interpolatedColorTargets.clear();
++            {
++                // JFG PORT: the present queue picks its interpolated targets from the list under this lock. They are destroyed
++                // after it, as that waits for a target being presented (RenderTarget::jfgPresentBegin).
++                std::vector<std::unique_ptr<RenderTarget>> oldTargets;
++                {
++                    std::scoped_lock<std::mutex> interpolatedLock(ext.sharedResources->interpolatedMutex);
++                    oldTargets.swap(ext.sharedResources->interpolatedColorTargets);
++                }
++            }
+         }
+ 
+         if (ext.sharedResources->userConfigChanged) {
+@@ -1082,7 +1119,7 @@ namespace RT64 {
                      }
  
                      // Do the resolve if using MSAA while target override is active and we're on the correct framebuffer pair index.
@@ -4968,7 +5124,7 @@ index 4309c86..bead732 100644
                          overrideTarget->resize(ext.workloadGraphicsWorker, colorTarget->width, colorTarget->height);
                          overrideTarget->resolveFromTarget(ext.workloadGraphicsWorker, colorTarget, ext.shaderLibrary);
                      }
-@@ -1150,8 +1179,13 @@ namespace RT64 {
+@@ -1156,8 +1193,13 @@ namespace RT64 {
      }
  
      void WorkloadQueue::threadAdvanceBarrier() {
@@ -4984,7 +5140,7 @@ index 4309c86..bead732 100644
      }
  
      void WorkloadQueue::threadAdvanceWorkloadId(uint64_t newWorkloadId) {
-@@ -1299,6 +1333,13 @@ namespace RT64 {
+@@ -1305,6 +1347,13 @@ namespace RT64 {
                              continue;
                          }
  
@@ -4998,7 +5154,7 @@ index 4309c86..bead732 100644
                          const auto &colorImg = fbPair.colorImage;
                          if (colorSet.find(colorImg.address) != colorSet.end()) {
                              continue;
-@@ -1381,7 +1422,24 @@ namespace RT64 {
+@@ -1387,7 +1436,24 @@ namespace RT64 {
                  }
  
                  ext.sharedResources->viOriginalRate = lastWorkload.viOriginalRate;
@@ -5024,7 +5180,7 @@ index 4309c86..bead732 100644
                  // Get the current and previous set of frame counters. The other set can be in use by the present queue. Skip if no new present event has arrived before this workload event.
                  InterpolatedFrameCounters &prevFrameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
                  const bool useDifferentCounters = (lastPresentId != workload.presentId);
-@@ -1544,6 +1602,12 @@ namespace RT64 {
+@@ -1550,6 +1616,12 @@ namespace RT64 {
                          curFrameWeight = 1.0f;
                      }
  
@@ -5037,7 +5193,7 @@ index 4309c86..bead732 100644
                      const bool uploadExtras = (frame == 0) && workloadConfig.raytracingEnabled;
                      if (uploadExtras) {
                          std::vector<BufferUploader::Upload> extrasUploads;
-@@ -1692,4 +1756,4 @@ namespace RT64 {
+@@ -1698,4 +1770,4 @@ namespace RT64 {
              }
          }
      }
@@ -7321,7 +7477,7 @@ index e7a0578..76d19ae 100644
 +            effectDesc.cullMode = RenderCullMode::NONE;
 +            effectDesc.depthEnabled = false;
 +            effectDesc.depthWriteEnabled = false;
-+            effectDesc.depthTargetFormat = RenderFormat::D32_FLOAT;
++            effectDesc.depthTargetFormat = RenderTarget::depthBufferFormat(); // the scene's: D32_FLOAT_S8_UINT on a page whose device has it
 +            effectDesc.multisampling = multisampling;
 +            effectDesc.pipelineLayout = pipelineLayout.get();
 +            effectDesc.primitiveTopology = RenderPrimitiveTopology::TRIANGLE_LIST;
@@ -7414,7 +7570,7 @@ index e7a0578..76d19ae 100644
 +
 +            // Composite: into the scene's colour target (with its read-only depth bound), added to what is there.
 +            bloomDesc.renderTargetFormat[0] = RenderTarget::colorBufferFormat(shaderLibrary->usesHDR);
-+            bloomDesc.depthTargetFormat = RenderFormat::D32_FLOAT;
++            bloomDesc.depthTargetFormat = RenderTarget::depthBufferFormat(); // the scene's, as the effects' above
 +            bloomDesc.multisampling = multisampling;
 +            bloomDesc.pixelShader = bloomCompositeShader.get();
 +            RenderBlendDesc &bloomBlend = bloomDesc.renderTargetBlend[0];
@@ -7582,6 +7738,82 @@ index 50cb454..c905fd6 100644
 -};
 \ No newline at end of file
 +};
+diff --git a/src/render/rt64_render_target.cpp b/src/render/rt64_render_target.cpp
+index a71348c..5e09f5e 100644
+--- a/src/render/rt64_render_target.cpp
++++ b/src/render/rt64_render_target.cpp
+@@ -5,6 +5,9 @@
+ #include "rt64_render_target.h"
+ 
+ #include <algorithm>
++#include <condition_variable>
++#include <mutex>
++#include <thread>
+ 
+ #include "gbi/rt64_f3d.h"
+ #include "shared/rt64_fb_common.h"
+@@ -35,9 +38,41 @@ namespace RT64 {
+ #if PRINT_CONSTRUCTOR_DESTRUCTOR
+         fprintf(stdout, "~RenderTarget(0x%p)\n", this);
+ #endif
++        jfgWaitForPresent();
++    }
++
++    // JFG PORT: see jfgPresentBegin.
++    namespace {
++        std::mutex jfgPresentMutex;
++        std::condition_variable jfgPresentCondition;
++        const RenderTarget *jfgPresentTarget = nullptr;
++        std::thread::id jfgPresentThread;
++    }
++
++    void RenderTarget::jfgPresentBegin(const RenderTarget *target) {
++        std::scoped_lock<std::mutex> lock(jfgPresentMutex);
++        jfgPresentTarget = target;
++        jfgPresentThread = std::this_thread::get_id();
++    }
++
++    void RenderTarget::jfgPresentEnd() {
++        {
++            std::scoped_lock<std::mutex> lock(jfgPresentMutex);
++            jfgPresentTarget = nullptr;
++        }
++
++        jfgPresentCondition.notify_all();
++    }
++
++    void RenderTarget::jfgWaitForPresent() const {
++        std::unique_lock<std::mutex> lock(jfgPresentMutex);
++        jfgPresentCondition.wait(lock, [&]() {
++            return (jfgPresentTarget != this) || (jfgPresentThread == std::this_thread::get_id());
++        });
+     }
+ 
+     void RenderTarget::releaseTextures() {
++        jfgWaitForPresent();
+         textureView.reset();
+         resolvedTextureView.reset();
+         texture.reset();
+diff --git a/src/render/rt64_render_target.h b/src/render/rt64_render_target.h
+index 11a7f8d..46c1608 100644
+--- a/src/render/rt64_render_target.h
++++ b/src/render/rt64_render_target.h
+@@ -54,6 +54,15 @@ namespace RT64 {
+         RenderTarget(uint32_t addressForName, Framebuffer::Type type, const RenderMultisampling &multisampling, bool usesHDR);
+         ~RenderTarget();
+         void releaseTextures();
++
++        // JFG PORT: the present queue marks the target it is drawing from until the GPU is done with that frame. Releasing a
++        // target's textures (a resize, or destroying it) waits for that on any other thread: the workload queue goes on to the
++        // next frame while in-between frames are still being shown, and the window growing (F11) made it resize or destroy a
++        // target the present was binding (crash in VIRenderer::render). A frame the game shows twice let it through, as its
++        // frame counters already counted those targets as presented.
++        static void jfgPresentBegin(const RenderTarget *target);
++        static void jfgPresentEnd();
++        void jfgWaitForPresent() const;
+         bool resize(RenderWorker *worker, uint32_t newWidth, uint32_t newHeight);
+         void setupColor(RenderWorker *worker, uint32_t width, uint32_t height);
+         void setupDepth(RenderWorker *worker, uint32_t width, uint32_t height);
 diff --git a/src/render/rt64_transform_processor.cpp b/src/render/rt64_transform_processor.cpp
 index 8b1a312..fa87500 100644
 --- a/src/render/rt64_transform_processor.cpp

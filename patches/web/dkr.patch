@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 3a6d44f..4cde2a1 100644
+index cc655f4..51331fd 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -22,6 +22,31 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -72,7 +72,7 @@ index 3a6d44f..4cde2a1 100644
  target_include_directories(RecompiledFuncs PRIVATE
      ${CMAKE_SOURCE_DIR}/include
      ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime/ultramodern/include
-@@ -261,6 +305,13 @@ if (WIN32)
+@@ -270,6 +314,13 @@ if (WIN32)
      target_link_libraries(JetForceGeminiRecompiled PRIVATE SDL2 Winmm.lib)
  endif()
  
@@ -86,7 +86,7 @@ index 3a6d44f..4cde2a1 100644
  if (CMAKE_SYSTEM_NAME MATCHES "Linux")
      find_package(SDL2 REQUIRED)
  
-@@ -316,10 +367,20 @@ target_link_libraries(JetForceGeminiRecompiled PRIVATE
+@@ -325,10 +376,20 @@ target_link_libraries(JetForceGeminiRecompiled PRIVATE
      rt64
      RmlUi::Core
      RmlUi::Debugger
@@ -108,7 +108,7 @@ index 3a6d44f..4cde2a1 100644
  if (${WIN32})
      add_compile_definitions(NOMINMAX)
  endif()
-@@ -347,7 +408,9 @@ else()
+@@ -356,7 +417,9 @@ else()
              set(SPIRVCROSS "DYLD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/spirv-cross/lib/arm64" "${PROJECT_SOURCE_DIR}/lib/rt64//src/contrib/spirv-cross/bin/x64/spirv-cross")
          endif()
      else()
@@ -119,7 +119,7 @@ index 3a6d44f..4cde2a1 100644
              set (DXC "LD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/lib/x64" "${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxc-linux")
          else()
              set (DXC "LD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/lib/arm64" "${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/arm64/dxc-linux")
-@@ -355,6 +418,13 @@ else()
+@@ -364,6 +427,13 @@ else()
      endif()
  endif()
  
@@ -134,26 +134,26 @@ index 3a6d44f..4cde2a1 100644
  build_pixel_shader(JetForceGeminiRecompiled "shaders/InterfacePS.hlsl" "shaders/InterfacePS.hlsl")
  
 diff --git a/assets/launcher.rml b/assets/launcher.rml
-index e47fa8e..91df4a6 100644
+index 288e3d6..5ebab49 100644
 --- a/assets/launcher.rml
 +++ b/assets/launcher.rml
-@@ -386,10 +386,7 @@
+@@ -494,10 +494,7 @@
  									<div class="rl-keys">
  										<div class="rl-heading">While playing</div>
  										<div class="rl-key-row"><div class="rl-key">Select / Esc</div><div>This settings menu (Profiles, General, Gameplay, Controls, Graphics and the rest)</div></div>
 -										<div class="rl-key-row"><div class="rl-key">F10</div><div>Tools bar: cheats, level warp, items, weapons, texture packs (Alt: back to the game)</div></div>
 -										<div class="rl-key-row"><div class="rl-key">F9</div><div>The original all-in-one debug window</div></div>
 -										<div class="rl-key-row"><div class="rl-key">F5 / F6</div><div>Back to the title screen / next texture pack</div></div>
--										<div class="rl-key-row"><div class="rl-key">F7</div><div>Fly camera for screenshots (General has its settings)</div></div>
+-										<div class="rl-key-row"><div class="rl-key">F7</div><div>Fly camera for screenshots (General, Advanced Options has its settings)</div></div>
 +										<!-- On a page the debug UI stays closed (src/debug_ui/backend.cpp), and F5-F10 with it. -->
  										<div class="rl-key-row"><div class="rl-key">F11 / Alt+Enter</div><div>Fullscreen</div></div>
  									</div>
  									<div class="rl-action-shadow rl-changelogs"><button id="rl_changelogs" class="rl-action rl-action--outline" data-event-click="show_changelog()" style="nav-left: #nav_play;">Changelogs</button></div>
 diff --git a/src/config/config.cpp b/src/config/config.cpp
-index eead20a..c8a76c2 100644
+index e0e91e3..0163538 100644
 --- a/src/config/config.cpp
 +++ b/src/config/config.cpp
-@@ -188,6 +188,11 @@ std::filesystem::path get_executable_folder_path() {
+@@ -179,6 +179,11 @@ std::filesystem::path get_executable_folder_path() {
      if (!ec) {
          cached = exe.parent_path();
      }
@@ -166,7 +166,7 @@ index eead20a..c8a76c2 100644
      if (cached.empty()) {
          cached = std::filesystem::current_path(ec);
 diff --git a/src/debug_ui/backend.cpp b/src/debug_ui/backend.cpp
-index 972c46e..57eca11 100644
+index cadb77f..83ffb16 100644
 --- a/src/debug_ui/backend.cpp
 +++ b/src/debug_ui/backend.cpp
 @@ -1,5 +1,26 @@
@@ -177,7 +177,7 @@ index 972c46e..57eca11 100644
 +// got, so there it stays closed, as it does on macOS: nothing calls set_render_hooks, and the rest answers "closed".
 +namespace dino::debug_ui::backend {
 +
-+ImGuiContext *dino_imgui_ctx = nullptr;
++ImGuiContext *jfg_imgui_ctx = nullptr;
 +bool is_open() { return false; }
 +bool toolbar_mode() { return false; }
 +bool toolbar_game_input() { return false; }
@@ -196,16 +196,16 @@ index 972c46e..57eca11 100644
  #include <atomic>
  
  extern "C" void jfg_tools_key(int scancode, int down, int repeat); // JFG PORT: src/jfg/jfg_ui_tools.cpp
-@@ -445,3 +466,4 @@ void set_render_hooks() {
+@@ -469,3 +490,4 @@ void set_render_hooks() {
  }
  
  }
 +#endif
 diff --git a/src/input/input.cpp b/src/input/input.cpp
-index 84988e3..32a4107 100644
+index 9b54ba5..9a04268 100644
 --- a/src/input/input.cpp
 +++ b/src/input/input.cpp
-@@ -637,6 +637,67 @@ static float smoothstep(float from, float to, float amount) {
+@@ -675,6 +675,67 @@ static float smoothstep(float from, float to, float amount) {
      return std::lerp(from, to, amount);
  }
  
@@ -273,7 +273,7 @@ index 84988e3..32a4107 100644
  // Update rumble to attempt to mimic the way n64 rumble ramps up and falls off
  void dino::input::update_rumble() {
      // Note: values are not accurate! just approximations based on feel
-@@ -655,7 +716,12 @@ void dino::input::update_rumble() {
+@@ -693,7 +754,12 @@ void dino::input::update_rumble() {
      {
          std::lock_guard lock{ InputState.cur_controllers_mutex };
          for (const auto& controller : InputState.cur_controllers) {
@@ -287,20 +287,20 @@ index 84988e3..32a4107 100644
      }
  }
 diff --git a/src/jfg/jfg_gore.cpp b/src/jfg/jfg_gore.cpp
-index 95e2bcc..94cb845 100644
+index a8a80f3..7e31fbe 100644
 --- a/src/jfg/jfg_gore.cpp
 +++ b/src/jfg/jfg_gore.cpp
-@@ -35,6 +35,9 @@
- #include "jfg_hooks.h"
+@@ -49,6 +49,9 @@
  #include "jfg_options.h"
+ #include "jfg_per_mod.h"
  #include "jfg_port.h"
 +#ifdef __EMSCRIPTEN__
 +#include "ultramodern/renderer_context.hpp"
 +#endif
  
- extern "C" void bloodSpurtAdd(uint8_t* rdram, recomp_context* ctx);
- extern "C" void bloodSpurtsDraw(uint8_t* rdram, recomp_context* ctx);
-@@ -214,6 +217,11 @@ extern "C" void jfg_blood_draw_kept(uint8_t* rdram_, recomp_context* ctx, uint32
+ extern "C" void bloodSpurtAdd_orig(uint8_t* rdram, recomp_context* ctx);
+ extern "C" void bloodSpurtUpdateAll_orig(uint8_t* rdram, recomp_context* ctx);
+@@ -241,6 +244,11 @@ void draw_kept_splats(uint8_t* rdram_, recomp_context* ctx) {
      // The most one pass of 64 has written, in bytes (a guess until one is seen).
      static uint32_t pass_gfx = 64 * 8 * 8 + 0x100, pass_vtx = 64 * 6 * 10;
      if (gfx_cursor + pass_gfx > gfx_end || vtx_cursor + pass_vtx > vtx_end) return;
@@ -312,8 +312,65 @@ index 95e2bcc..94cb845 100644
  
      // The frame's list calls this part of the block; the passes write into it.
      const uint32_t gfx_at = (uint32_t)ctx->r4, vtx_at = (uint32_t)ctx->r6;
+diff --git a/src/jfg/jfg_mod_options.cpp b/src/jfg/jfg_mod_options.cpp
+index b74258b..e34bbd4 100644
+--- a/src/jfg/jfg_mod_options.cpp
++++ b/src/jfg/jfg_mod_options.cpp
+@@ -66,12 +66,12 @@ void set_option(const Pending& p) {
+         else recomp::mods::enable_mod(p.mod, false);
+         return;
+     }
+-    const recomp::mods::ConfigSchema& schema = recomp::mods::get_mod_config_schema(p.mod);
++    const recomp::config::ConfigSchema& schema = recomp::mods::get_mod_config_schema(p.mod);
+     const auto it = schema.options_by_id.find(p.option);
+     if (it == schema.options_by_id.end()) return;
+-    const recomp::mods::ConfigOption& o = schema.options[it->second];
+-    if (o.type == recomp::mods::ConfigOptionType::Enum) recomp::mods::set_mod_config_value(p.mod, p.option, (uint32_t)p.value);
+-    else if (o.type == recomp::mods::ConfigOptionType::Number) recomp::mods::set_mod_config_value(p.mod, p.option, (double)p.value);
++    const recomp::config::ConfigOption& o = schema.options[it->second];
++    if (o.type == recomp::config::ConfigOptionType::Enum) recomp::mods::set_mod_config_value(p.mod, p.option, (uint32_t)p.value);
++    else if (o.type == recomp::config::ConfigOptionType::Number) recomp::mods::set_mod_config_value(p.mod, p.option, (double)p.value);
+     if (p.enable) enable(p.mod);
+ }
+ } // namespace
+diff --git a/src/jfg/jfg_profiles.cpp b/src/jfg/jfg_profiles.cpp
+index 4e94634..7474e07 100644
+--- a/src/jfg/jfg_profiles.cpp
++++ b/src/jfg/jfg_profiles.cpp
+@@ -230,6 +230,12 @@ std::string option_value_text(const std::string& key, int value) {
+ 
+ std::string profile_text(const std::string& name) {
+     const BuiltinProfile* b = builtin_profile(name);
++#ifdef __EMSCRIPTEN__
++    // On a page the other built-in profiles (a new player's Modern among them) run the game at 60 and interpolate up to
++    // the display's rate, as the page's State opens (jfg_options.h), in place of the desktop's 30 smoothed to 60: a
++    // page draws at the display's rate (N64Recomp-browser's CLAUDE.md, Rules). Their later lines win.
++    if (b != nullptr && std::string(b->name) != "Original") return std::string(b->text) + "frame_rate=1\nsmooth_motion=1\n";
++#endif
+     return b ? std::string(b->text) : read_text_file(user_profile_path(name));
+ }
+ 
+diff --git a/src/jfg/jfg_web.cpp b/src/jfg/jfg_web.cpp
+index e35976e..201575a 100644
+--- a/src/jfg/jfg_web.cpp
++++ b/src/jfg/jfg_web.cpp
+@@ -17,6 +17,14 @@ extern "C" EMSCRIPTEN_KEEPALIVE void jfg_web_warp(int level, int character, int
+     g.warp_entrance = entrance;
+     g.pending_warp = true;
+ }
++// The N64's controls (no dual-stick, no mouse and keyboard) until the page is reloaded, not saved, for the play plans
++// (tools/make_plans.py), whose keys are the N64 layout's: a new player's Modern profile aims and fires with the mouse's
++// buttons, which a plan can't press.
++extern "C" EMSCRIPTEN_KEEPALIVE void jfg_web_n64_controls() {
++    apply_option("dual_stick", 0);
++    apply_option("mouse_keyboard", 0);
++    apply_option("dual_layout", 0);
++}
+ extern "C" EMSCRIPTEN_KEEPALIVE void jfg_web_level_names() {
+     load_level_names();
+     for (size_t i = 0; i < g_level_names.size(); i++) {
 diff --git a/src/main.cpp b/src/main.cpp
-index d5f72ac..bedf388 100644
+index b7e3979..d4ce8ec 100644
 --- a/src/main.cpp
 +++ b/src/main.cpp
 @@ -7,7 +7,9 @@
@@ -327,7 +384,7 @@ index d5f72ac..bedf388 100644
  #include "ultramodern/ultramodern.hpp"
  #include "librecomp/game.hpp"
  
-@@ -78,6 +80,7 @@ std::vector<recomp::GameEntry> supported_games = {
+@@ -90,6 +92,7 @@ std::vector<recomp::GameEntry> supported_games = {
          // XXH3-64 of the US ROM (sha1 493ced9008dbe932d6e91179b68e8630cf23a023)
          .rom_hash = 0x44830C263C2DE108,
          .internal_name = "JET FORCE GEMINI    ",
@@ -335,7 +392,7 @@ index d5f72ac..bedf388 100644
          .game_id = u8"jfg-us",
          .mod_game_id = "jet-force-gemini",
          .save_type = recomp::SaveType::Flashram,
-@@ -152,7 +155,8 @@ int main(int argc, char** argv) {
+@@ -172,7 +175,8 @@ int main(int argc, char** argv) {
  
  #if !defined(__APPLE__)
      // JFG port: run from the folder the executable is in, whatever folder it was started from. Assets, the controller
@@ -345,7 +402,7 @@ index d5f72ac..bedf388 100644
      {
          std::error_code ec;
          std::filesystem::current_path(dino::config::get_executable_folder_path(), ec);
-@@ -169,11 +173,16 @@ int main(int argc, char** argv) {
+@@ -189,11 +193,16 @@ int main(int argc, char** argv) {
      // Map this executable into memory and lock it, which should keep it in physical memory. This ensures
      // that there are no stutters from the OS having to load new pages of the executable whenever a new code page is run.
      dino::runtime::PreloadContext preload_context;
@@ -362,7 +419,7 @@ index d5f72ac..bedf388 100644
  
  #ifdef _WIN32
      // Set up high resolution timing period.
-@@ -314,7 +323,7 @@ int main(int argc, char** argv) {
+@@ -335,7 +344,7 @@ int main(int argc, char** argv) {
          recomp::is_rom_valid(supported_games[0].game_id)) {
          // HACK: This relies on unsupported behavior in the runtime and requires using a fork
          //       of the runtime with a hack to avoid an uninitialized VI origin when doing this
@@ -371,7 +428,7 @@ index d5f72ac..bedf388 100644
          recompui::hide_all_contexts();
      }
  
-@@ -349,8 +358,10 @@ int main(int argc, char** argv) {
+@@ -370,8 +379,10 @@ int main(int argc, char** argv) {
      timeEndPeriod(1);
  #endif
  
@@ -399,10 +456,10 @@ index 2ece15e..8c93b94 100644
  #include "ui/recomp_ui.h"
  #include "librecomp/helpers.hpp"
 diff --git a/src/renderer/renderer.cpp b/src/renderer/renderer.cpp
-index 179d05e..d8a8c5e 100644
+index c1fc42b..8edd5b1 100644
 --- a/src/renderer/renderer.cpp
 +++ b/src/renderer/renderer.cpp
-@@ -232,6 +232,12 @@ RT64::UserConfiguration::RefreshRate to_rt64(ultramodern::renderer::RefreshRate
+@@ -150,6 +150,12 @@ RT64::UserConfiguration::RefreshRate to_rt64(ultramodern::renderer::RefreshRate
  }
  
  RT64::UserConfiguration::InternalColorFormat to_rt64(ultramodern::renderer::HighPrecisionFramebuffer option) {
@@ -415,19 +472,19 @@ index 179d05e..d8a8c5e 100644
      switch (option) {
          case ultramodern::renderer::HighPrecisionFramebuffer::Off:
              return RT64::UserConfiguration::InternalColorFormat::Standard;
-@@ -381,9 +387,9 @@ RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::WindowHandle win
+@@ -298,9 +304,9 @@ ultramodern::renderer::GraphicsApi map_graphics_api(RT64::UserConfiguration::Gra
+ RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::WindowHandle window_handle, bool debug) {
      fprintf(stderr, "[JFG] Initializing RT64 renderer\n");
      static unsigned char dummy_rom_header[0x40];
-     recompui::set_render_hooks();
 -#if !defined(__APPLE__)
 +#if !defined(__APPLE__) && !defined(__EMSCRIPTEN__)
      // The inherited developer-only ImGui overlay has D3D12 and Vulkan
 -    // backends, but no Metal backend. The regular RmlUi launcher and menus
 +    // backends, but no Metal (or WebGPU) backend. The regular RmlUi launcher and menus
      // have their own renderer and remain enabled on macOS.
-     debug_ui::backend::set_render_hooks();
- #endif
-@@ -394,6 +400,9 @@ RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::WindowHandle win
+     // JFG PORT: hooks draw in the order added. The ImGui layer (mods' overlay shapes, the port's toasts, F9's window)
+     // goes first so the RmlUi menus and F10's tools are drawn over it, not under a mod's HUD.
+@@ -314,6 +320,9 @@ RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::WindowHandle win
      appCore.window = window_handle.window;
  #elif defined(__linux__) || defined(__ANDROID__)
      appCore.window = window_handle;
@@ -437,7 +494,7 @@ index 179d05e..d8a8c5e 100644
  #elif defined(__APPLE__)
      appCore.window.window = window_handle.window;
      appCore.window.view = window_handle.view;
-@@ -528,15 +537,23 @@ RT64Context::~RT64Context() {
+@@ -448,16 +457,24 @@ RT64Context::~RT64Context() {
      }
  }
  
@@ -454,17 +511,18 @@ index 179d05e..d8a8c5e 100644
 +    app->state->RDRAM = rdram_snapshot;
 +    app->state->gameRDRAM = game_rdram;
      app->state->rsp->reset();
-     constexpr uint32_t DkrRdramMask = 0x007FFFFFU;
-     app->interpreter->loadUCodeGBI(task->t.ucode & DkrRdramMask, task->t.ucode_data & DkrRdramMask, true);
--    app->processDisplayLists(app->core.RDRAM, task->t.data_ptr & DkrRdramMask, 0, true);
-+    app->processDisplayLists(rdram_snapshot, task->t.data_ptr & DkrRdramMask, 0, true);
+     // Physical addresses in the console's 8 MB of RDRAM (the task's pointers are KSEG0 addresses).
+     constexpr uint32_t RdramPhysicalMask = 0x007FFFFFU;
+     app->interpreter->loadUCodeGBI(task->t.ucode & RdramPhysicalMask, task->t.ucode_data & RdramPhysicalMask, true);
+-    app->processDisplayLists(app->core.RDRAM, task->t.data_ptr & RdramPhysicalMask, 0, true);
++    app->processDisplayLists(rdram_snapshot, task->t.data_ptr & RdramPhysicalMask, 0, true);
 +    app->state->RDRAM = game_rdram;
 +    app->state->gameRDRAM = nullptr;
  }
  
  void RT64Context::preload_common_shaders() {
-@@ -682,6 +699,25 @@ void RT64Context::update_game_aspect_override() {
-         game_aspect_override ? "enabled" : "disabled");
+@@ -537,6 +554,25 @@ void RT64Context::update_render_options() {
+     }
  }
  
 +// Before the game starts the runtime has every VI draw a black frame at fb_address (RecompFrontend's renderer does the
@@ -487,9 +545,9 @@ index 179d05e..d8a8c5e 100644
 +}
 +
  void RT64Context::update_screen() {
-     update_game_aspect_override();
+     update_render_options();
      app->updateScreen();
-@@ -1036,13 +1072,13 @@ void enable_texture_pack(const recomp::mods::ModContext& context, const recomp::
+@@ -901,13 +937,13 @@ void enable_texture_pack(const recomp::mods::ModContext& context, const recomp::
      texture_pack_action_queue.enqueue(TexturePackEnableAction{mod.manifest.mod_id});
  
      // Check for the texture pack enabled config option.
@@ -506,7 +564,7 @@ index 179d05e..d8a8c5e 100644
              uint32_t value;
              if (uint32_t* value_ptr = std::get_if<uint32_t>(&value_variant)) {
                  value = *value_ptr;
-@@ -1076,16 +1112,16 @@ void secondary_disable_texture_pack(const std::string& mod_id) {
+@@ -941,16 +977,16 @@ void secondary_disable_texture_pack(const std::string& mod_id) {
  
  // HD texture enable option. Must be an enum with two options.
  // The first option is treated as disabled and the second option is treated as enabled.
@@ -527,7 +585,7 @@ index 179d05e..d8a8c5e 100644
              if (show_errors) {
                  recompui::message_box(("Mod has the special config option id for enabling an HD texture pack (\"" + special_option_texture_pack_enabled + "\"), but the config option doesn't have exactly 2 values.").c_str());
 diff --git a/src/renderer/renderer.hpp b/src/renderer/renderer.hpp
-index 1eeacd5..8b7bfbe 100644
+index 86b1c48..9a18d08 100644
 --- a/src/renderer/renderer.hpp
 +++ b/src/renderer/renderer.hpp
 @@ -24,7 +24,8 @@ namespace dino::renderer {
@@ -540,7 +598,7 @@ index 1eeacd5..8b7bfbe 100644
          void update_screen() override;
          void shutdown() override;
          uint32_t get_display_framerate() const override;
-@@ -56,5 +57,5 @@ namespace dino::renderer {
+@@ -55,5 +56,5 @@ namespace dino::renderer {
  
      // Texture pack enable option. Must be an enum with two options.
      // The first option is treated as disabled and the second option is treated as enabled.
@@ -548,7 +606,7 @@ index 1eeacd5..8b7bfbe 100644
 +    bool is_texture_pack_enable_config_option(const recomp::config::ConfigOption& option, bool show_errors);
  }
 diff --git a/src/runtime/audio.cpp b/src/runtime/audio.cpp
-index 6c38c22..f9d659a 100644
+index 9402ada..6c6930a 100644
 --- a/src/runtime/audio.cpp
 +++ b/src/runtime/audio.cpp
 @@ -10,6 +10,9 @@
@@ -586,9 +644,9 @@ index 6c38c22..f9d659a 100644
 +}
 +#endif
      
- void queue_samples(int16_t* audio_data, size_t sample_count) {
-     // Buffer for holding the output of swapping the audio channels. This is reused across
-@@ -76,7 +99,7 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
+ extern "C" void jfg_music_mix(float* samples, size_t frames, uint32_t rate, float gain); // jfg_music.cpp
+ extern "C" void jfg_sounds_mix(float* samples, size_t frames, uint32_t rate, float gain); // jfg_music.cpp
+@@ -86,7 +109,7 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
          throw std::runtime_error("Error using SDL audio converter");
      }
  
@@ -597,7 +655,7 @@ index 6c38c22..f9d659a 100644
      uint32_t num_bytes_to_queue = audio_convert.len_cvt - output_channels * discarded_output_frames * sizeof(swap_buffer[0]);
      float* samples_to_queue = swap_buffer.data() + output_channels * discarded_output_frames / 2;
  
-@@ -94,13 +117,13 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
+@@ -104,13 +127,13 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
  
      // Queue the swapped audio data.
      // Offset the data start by only half the discarded frame count as the other half of the discarded frames are at the end of the buffer.
@@ -613,7 +671,7 @@ index 6c38c22..f9d659a 100644
  
      // Scale the byte count based on the ratio of sample rates and channel counts.
      buffered_byte_count = buffered_byte_count * 2 * sample_rate / output_sample_rate / output_channels;
-@@ -139,6 +162,10 @@ void set_frequency(uint32_t freq) {
+@@ -149,6 +172,10 @@ void set_frequency(uint32_t freq) {
  }
  
  bool reset_audio(uint32_t output_freq) {
@@ -624,7 +682,7 @@ index 6c38c22..f9d659a 100644
      SDL_AudioSpec spec_desired{
          .freq = (int)output_freq,
          .format = AUDIO_F32,
-@@ -159,6 +186,7 @@ bool reset_audio(uint32_t output_freq) {
+@@ -169,6 +196,7 @@ bool reset_audio(uint32_t output_freq) {
      }
  
      SDL_PauseAudioDevice(audio_device, 0);
@@ -821,10 +879,10 @@ index b9eb50f..b7d9f0e 100644
  #include "RmlUi/Core/StreamMemory.h"
  
 diff --git a/src/ui/ui_config.cpp b/src/ui/ui_config.cpp
-index bbdeaf7..27647bf 100644
+index d0148dc..62a850d 100644
 --- a/src/ui/ui_config.cpp
 +++ b/src/ui/ui_config.cpp
-@@ -125,8 +125,14 @@ void jfg_config_menu_refresh() {
+@@ -134,8 +134,14 @@ void jfg_config_menu_refresh() {
      if (jfg_config_menu_created) {
          Rml::ElementDocument* doc = recompui::get_config_context_id().get_document();
          if (Rml::Element* quit_tab = doc != nullptr ? doc->GetElementById("tab_jfg_quit") : nullptr) {
@@ -837,9 +895,9 @@ index bbdeaf7..27647bf 100644
              else quit_tab->SetProperty(Rml::PropertyId::Display, Rml::Style::Display::None);
 +#endif
          }
-     }
-     jfg_profile_entries.clear();
-@@ -1031,6 +1037,32 @@ public:
+         // The bindings have no tab of their own (Customize Buttons on the Controls tab opens them, jfg_config_show_bindings).
+         if (Rml::Element* bindings_tab = doc != nullptr ? doc->GetElementById("tab_controls") : nullptr) {
+@@ -990,6 +996,32 @@ public:
          recompui::update_mod_list(false);
          recompui::get_config_tabset()->AddEventListener(Rml::EventId::Tabchange, &config_tabset_listener);
          recompui::get_config_tabset()->AddEventListener(Rml::EventId::Focus, &config_focus_scroll_listener, true); // JFG PORT: capture phase
@@ -873,15 +931,14 @@ index bbdeaf7..27647bf 100644
      void register_events(recompui::UiEventListenerInstancer& listener) override {
          recompui::register_event(listener, "apply_options",
 diff --git a/src/ui/ui_launcher.cpp b/src/ui/ui_launcher.cpp
-index 47d98fb..b6ae48e 100644
+index 673ffb1..3440887 100644
 --- a/src/ui/ui_launcher.cpp
 +++ b/src/ui/ui_launcher.cpp
-@@ -12,6 +12,12 @@
- #include <chrono>
- #include <fstream>
+@@ -14,6 +14,11 @@
  #include <iterator>
+ #include <algorithm>
+ #include <map>
 +#ifdef __EMSCRIPTEN__
-+#include <algorithm>
 +#include <fcntl.h>
 +#include <sys/stat.h>
 +#include <unistd.h>
@@ -889,7 +946,7 @@ index 47d98fb..b6ae48e 100644
  
  static std::string version_string;
  #include "jfg/jfg_update_check.h"
-@@ -128,9 +134,30 @@ static Rml::ElementDocument* event_document(Rml::Event& event) {
+@@ -138,9 +143,30 @@ static Rml::ElementDocument* event_document(Rml::Event& event) {
  
  // Images the launcher shows, registered under the names its RML uses ("/jfg_vibintoast" -> "jfg_vibintoast").
  static bool queue_launcher_image(const char* name, const char* file) {
@@ -920,7 +977,23 @@ index 47d98fb..b6ae48e 100644
      if (bytes.empty()) return false;
      recompui::queue_image_from_bytes_file(name, bytes);
      return true;
-@@ -392,7 +419,7 @@ void select_rom() {
+@@ -388,7 +414,14 @@ void jfg_launcher_step_page(int dir) {
+     int cur = 0;
+     for (int i = 0; i < n; i++) if (launcher_page == LAUNCHER_PAGES[i].id) cur = i;
+     int next = ((cur + dir) % n + n) % n;
+-    if (std::string(LAUNCHER_PAGES[next].id) == "bindings") next = ((next + dir) % n + n) % n; // not in the sidebar
++    // Customize Buttons isn't in the sidebar, and a page hides Texture Packs and Get Mods (where the launcher is made).
++    auto skipped = [](const std::string& id) {
++#ifdef __EMSCRIPTEN__
++        if (id == "textures" || id == "store") return true;
++#endif
++        return id == "bindings";
++    };
++    while (skipped(LAUNCHER_PAGES[next].id)) next = ((next + dir) % n + n) % n;
+     if (Rml::Element* button = doc->GetElementById(LAUNCHER_PAGES[next].nav_id)) button->Focus(true);
+ }
+ 
+@@ -589,7 +622,7 @@ void select_rom() {
  
  void start_game() {
      jfg_launcher_commit_settings(); // JFG PORT: settings changed on the launcher's pages
@@ -929,30 +1002,31 @@ index 47d98fb..b6ae48e 100644
      recompui::hide_all_contexts();
  }
  
-@@ -420,6 +447,33 @@ public:
- 		launcher_context = recompui::create_context(dino::runtime::get_asset_path("launcher.rml"));
+@@ -620,6 +653,34 @@ public:
+         if (const char* page = std::getenv("JFG_DEBUG_LAUNCHER_PAGE")) launcher_page = page;
          // JFG PORT: with a ROM loaded, the launcher opens on its Start button (autofocus in launcher.rml follows rom_valid).
          if (rom_valid) focus_soon("rl_start");
 +#ifdef __EMSCRIPTEN__
-+        // A program that ends leaves the page dead (a reload or closing the tab is the way out), so no Exit there,
-+        // and no Texture Packs: a page has no folder to put one in.
++        // A program that ends leaves the page dead (a reload or closing the tab is the way out), so no Exit there; no
++        // Texture Packs, as a page has no folder to put one in; and no Get Mods, as a page loads no mods (its store
++        // would download ones it can't run, through curl, which a page hasn't got either).
 +        {
 +            recompui::ContextId old_context = recompui::try_close_current_context();
 +            if (Rml::ElementDocument* doc = launcher_context.get_document()) {
-+                for (const char* id : { "nav_exit", "tab_jfg_textures" }) {
++                for (const char* id : { "nav_exit", "tab_jfg_textures", "tab_store" }) {
 +                    if (Rml::Element* button = doc->GetElementById(id)) {
 +                        button->GetParentNode()->SetProperty(Rml::PropertyId::Display, Rml::Style::Display::None);
 +                    }
 +                }
-+                if (Rml::Element* general = doc->GetElementById("tab_general")) {
-+                    general->SetProperty("nav-down", "#nav_about");
-+                }
-+                if (Rml::Element* about = doc->GetElementById("nav_about")) {
-+                    about->SetProperty("nav-up", "#tab_general");
-+                    about->SetProperty("nav-down", "#nav_play");
-+                }
-+                if (Rml::Element* play = doc->GetElementById("nav_play")) {
-+                    play->SetProperty("nav-up", "#nav_about");
++                // The sidebar's keyboard and controller order without them.
++                const std::pair<const char*, const char*> links[] = {
++                    { "tab_jfg_graphics", "tab_mods" }, { "tab_mods", "nav_about" }, { "nav_about", "nav_play" } };
++                for (const auto& [up, down] : links) {
++                    Rml::Element* a = doc->GetElementById(up);
++                    Rml::Element* b = doc->GetElementById(down);
++                    if (a == nullptr || b == nullptr) continue;
++                    a->SetProperty("nav-down", std::string("#") + down);
++                    b->SetProperty("nav-up", std::string("#") + up);
 +                }
 +            }
 +            if (old_context != recompui::ContextId::null()) {
@@ -963,7 +1037,7 @@ index 47d98fb..b6ae48e 100644
      }
      void register_events(recompui::UiEventListenerInstancer& listener) override {
          recompui::register_event(listener, "select_rom",
-@@ -543,9 +597,12 @@ public:
+@@ -774,9 +835,12 @@ public:
              model_handle.DirtyVariable("update_percent");
              model_handle.DirtyVariable("update_status");
          });
@@ -974,8 +1048,52 @@ index 47d98fb..b6ae48e 100644
          jfg_official_check_start(); // the official HD texture pack's latest version (Texture Packs page)
 +#endif
  
-         // JFG PORT: the official HD texture pack (Texture Packs page).
-         if (auto row = constructor.RegisterStruct<OfficialPackRow>()) {
+         // JFG PORT: the language drop-down (Play page).
+         if (auto locale = constructor.RegisterStruct<LauncherLocale>()) {
+diff --git a/src/ui/ui_mod_details_panel.cpp b/src/ui/ui_mod_details_panel.cpp
+index e9a226b..20bf4e1 100644
+--- a/src/ui/ui_mod_details_panel.cpp
++++ b/src/ui/ui_mod_details_panel.cpp
+@@ -12,21 +12,21 @@ extern const std::string mod_tab_id;
+ 
+ // JFG PORT: the mod menu's look, shared with ui_mod_menu.cpp.
+ namespace modui {
+-    bool is_switch_option(const recomp::mods::ConfigOption& option) {
+-        if (option.id != "enabled" || option.type != recomp::mods::ConfigOptionType::Enum) return false;
+-        const auto& e = std::get<recomp::mods::ConfigOptionEnum>(option.variant);
++    bool is_switch_option(const recomp::config::ConfigOption& option) {
++        if (option.id != "enabled" || option.type != recomp::config::ConfigOptionType::Enum) return false;
++        const auto& e = std::get<recomp::config::ConfigOptionEnum>(option.variant);
+         return e.options.size() == 2;
+     }
+ 
+     bool has_switch(const std::string& mod_id) {
+-        const recomp::mods::ConfigSchema& schema = recomp::mods::get_mod_config_schema(mod_id);
++        const recomp::config::ConfigSchema& schema = recomp::mods::get_mod_config_schema(mod_id);
+         const auto it = schema.options_by_id.find("enabled");
+         return it != schema.options_by_id.end() && is_switch_option(schema.options[it->second]);
+     }
+ 
+     static bool switched_off(const std::string& mod_id) {
+         if (!has_switch(mod_id)) return false;
+-        const recomp::mods::ConfigValueVariant v = recomp::mods::get_mod_config_value(mod_id, "enabled");
++        const recomp::config::ConfigValueVariant v = recomp::mods::get_mod_config_value(mod_id, "enabled");
+         return std::holds_alternative<uint32_t>(v) && std::get<uint32_t>(v) == 0;
+     }
+ 
+diff --git a/src/ui/ui_mod_details_panel.h b/src/ui/ui_mod_details_panel.h
+index 4d009a3..5979adf 100644
+--- a/src/ui/ui_mod_details_panel.h
++++ b/src/ui/ui_mod_details_panel.h
+@@ -32,7 +32,7 @@ namespace modui {
+     // so works while the game runs (the mod stays loaded and does nothing while it is Off). The option is not listed
+     // on the mod's settings page.
+     bool has_switch(const std::string& mod_id);
+-    bool is_switch_option(const recomp::mods::ConfigOption& option);
++    bool is_switch_option(const recomp::config::ConfigOption& option);
+     // Whether the toggle can be changed now: the game not started yet, a mod that turns on and off as it runs, or a
+     // loaded mod with a switch.
+     bool can_toggle(const recomp::mods::ModDetails& details);
 diff --git a/src/ui/ui_mod_installer.cpp b/src/ui/ui_mod_installer.cpp
 index 013b7c8..e16a8f0 100644
 --- a/src/ui/ui_mod_installer.cpp
@@ -991,10 +1109,10 @@ index 013b7c8..e16a8f0 100644
          static_assert(false, "Unimplemented for this platform.");
  #endif
 diff --git a/src/ui/ui_mod_menu.cpp b/src/ui/ui_mod_menu.cpp
-index b46c694..d3c4bc3 100644
+index 74662db..855809a 100644
 --- a/src/ui/ui_mod_menu.cpp
 +++ b/src/ui/ui_mod_menu.cpp
-@@ -275,6 +275,9 @@ void ModMenu::open_mods_folder() {
+@@ -323,6 +323,9 @@ void ModMenu::open_mods_folder() {
  #elif defined(__APPLE__)
      std::string command = "open \"" + mods_directory.string() + "\"";
      std::system(command.c_str());
@@ -1004,16 +1122,16 @@ index b46c694..d3c4bc3 100644
  #else
      static_assert(false, "Not implemented for this platform.");
  #endif
-@@ -315,7 +318,7 @@ void ModMenu::mod_selected(uint32_t mod_index) {
+@@ -416,7 +419,7 @@ void ModMenu::mod_selected(uint32_t mod_index) {
  
      if (active_mod_index >= 0) {
          std::string thumbnail_src = generate_thumbnail_src_for_mod(mod_details[mod_index].mod_id);
 -        const recomp::mods::ConfigSchema &config_schema = recomp::mods::get_mod_config_schema(mod_details[active_mod_index].mod_id);
 +        const recomp::config::ConfigSchema &config_schema = recomp::mods::get_mod_config_schema(mod_details[active_mod_index].mod_id);
-         bool toggle_checked = is_mod_enabled_or_auto(mod_details[mod_index].mod_id);
+         bool toggle_checked = modui::status_of(mod_details[mod_index].mod_id) != modui::Status::Off;
          bool auto_enabled = recomp::mods::is_mod_auto_enabled(mod_details[mod_index].mod_id);
-         bool toggle_enabled = !auto_enabled && (mod_details[mod_index].runtime_toggleable || !ultramodern::is_game_started());
-@@ -479,11 +482,22 @@ static void mark_other_mod_menus_dirty(ModMenu* changed) {
+         bool toggle_enabled = !auto_enabled && modui::can_toggle(mod_details[mod_index]);
+@@ -598,11 +601,22 @@ static void mark_other_mod_menus_dirty(ModMenu* changed) {
      }
  }
  
@@ -1039,7 +1157,7 @@ index b46c694..d3c4bc3 100644
              [this](const std::string &id, uint32_t value) {
                  mod_enum_option_changed(id, value);
                  mod_hd_textures_enabled_changed(value);
-@@ -505,9 +519,9 @@ void ModMenu::mod_configure_requested() {
+@@ -624,9 +638,9 @@ void ModMenu::mod_configure_requested() {
          sub_menu_context.open();
          config_sub_menu->clear_options();
  
@@ -1052,8 +1170,8 @@ index b46c694..d3c4bc3 100644
              if (std::holds_alternative<std::monostate>(config_value)) {
                  continue;
              }
-@@ -517,19 +531,19 @@ void ModMenu::mod_configure_requested() {
-             }
+@@ -637,19 +651,19 @@ void ModMenu::mod_configure_requested() {
+             if (modui::is_switch_option(option)) continue; // JFG PORT: the On/Off toggle is this option
  
              switch (option.type) {
 -            case recomp::mods::ConfigOptionType::Enum: {
@@ -1079,10 +1197,10 @@ index b46c694..d3c4bc3 100644
                      [this](const std::string &id, const std::string &value){ mod_string_option_changed(id, value); });
                  break;
 diff --git a/src/ui/ui_mod_menu.h b/src/ui/ui_mod_menu.h
-index 7c84dc5..76b5396 100644
+index 92e183f..6a7da39 100644
 --- a/src/ui/ui_mod_menu.h
 +++ b/src/ui/ui_mod_menu.h
-@@ -88,7 +88,7 @@ private:
+@@ -108,7 +108,7 @@ private:
      void mod_selected(uint32_t mod_index);
      void mod_dragged(uint32_t mod_index, EventDrag drag);
      void mod_configure_requested();
@@ -1177,10 +1295,10 @@ index b538305..34a3365 100644
                  screen_framebuffer_ = device_->createFramebuffer(plume::RenderFramebufferDesc(&color_attachment, 1));
                  screen_descriptor_set_->setTexture(0, screen_texture_.get(), plume::RenderTextureLayout::SHADER_READ);
 diff --git a/src/ui/ui_state.cpp b/src/ui/ui_state.cpp
-index af46478..3f5b655 100644
+index 7386d28..a0e545a 100644
 --- a/src/ui/ui_state.cpp
 +++ b/src/ui/ui_state.cpp
-@@ -1298,7 +1298,10 @@ void recompui::release_image(const std::string &src) {
+@@ -1441,7 +1441,10 @@ void recompui::release_image(const std::string &src) {
  }
  
  void recompui::drop_files(const std::list<std::filesystem::path> &file_list) {
