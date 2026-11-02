@@ -14,6 +14,7 @@
 // reticle at the aim point, its depth and heading digits that change every tick, the target boxes on enemies), and one
 // step for all of them made the reticle shake while turning (issue #8).
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -223,6 +224,22 @@ void publish() {
     std::lock_guard<std::mutex> lock(g_layer_mutex);
     layer.seq = ++g_layer_seq;
     if (g_trace) trace_add(g_trace_published, layer.fb, (uint32_t)layer.pixels.size());
+    if (g_trace) {
+        // Once a second: how many of the layers had lines (a reticle) and the most line pixels in one, without the rain.
+        static uint32_t layers = 0, with_lines = 0, most = 0;
+        static auto last = std::chrono::steady_clock::now();
+        uint32_t lines = 0;
+        for (const LayerPixel& p : layer.pixels) lines += p.still ? 0 : 1;
+        layers++;
+        with_lines += lines != 0 ? 1 : 0;
+        most = std::max(most, lines);
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last >= std::chrono::seconds(1)) {
+            std::fprintf(stderr, "[cpu-layer] lines: %u of %u layers, at most %u px\n", with_lines, layers, most);
+            layers = with_lines = most = 0;
+            last = now;
+        }
+    }
     if (g_trace && (g_layer_seq % 60) == 0 && !layer.pixels.empty()) {
         int x0 = 9999, y0 = 9999, x1 = -1, y1 = -1, still = 0;
         for (const LayerPixel& p : layer.pixels) { x0 = std::min(x0, (int)p.x); y0 = std::min(y0, (int)p.y); x1 = std::max(x1, (int)p.x); y1 = std::max(y1, (int)p.y); still += p.still ? 1 : 0; }
@@ -324,7 +341,7 @@ void match_groups(Layer& cur, const Layer* prev) {
 
 } // namespace
 
-// mainCPUeffects (jfg.us.toml): before rainDraw is called ...
+// Before rainDraw (its wrapper, below; called only from mainCPUeffects) ...
 extern "C" void jfg_cpu_rain_before(uint8_t* rdram, recomp_context* ctx) {
     capture_begin(rdram, ctx);
 }
@@ -335,19 +352,19 @@ extern "C" void jfg_cpu_rain_after(uint8_t* rdram, recomp_context* ctx) {
     capture_end(rdram, true);
 }
 
-// Entry of fxOutputLines.
+// Before fxOutputLines (its wrapper, below).
 extern "C" void jfg_cpu_lines_before(uint8_t* rdram, recomp_context* ctx) {
     capture_begin(rdram, ctx);
 }
 
-// mainCPUeffects, right after fxOutputLines returns: the frame's layer is complete.
+// After fxOutputLines (its wrapper; mainCPUeffects is its only caller): the frame's layer is complete.
 extern "C" void jfg_cpu_lines_after(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
     capture_end(rdram, false);
     publish();
 }
 
-// mainCPUeffects, right after fxInitLines returns: during a fade (going through a loading zone, a warp) the game draws
+// mainCPUeffects, right after its fxInitLines returns (the wrappers below): during a fade (going through a loading zone, a warp) the game draws
 // no lines and only clears its list. The frame's buffer gets an empty layer, so the last reticle drawn into it is not
 // shown again on every frame presented for it until lines are drawn there again.
 extern "C" void jfg_cpu_lines_faded(uint8_t* rdram, recomp_context* ctx) {
@@ -418,4 +435,48 @@ bool cpu_layer_build(ImDrawList* list) {
     return true;
 }
 
+// Present thread (render hook), after the frame's render call, when cpu_layer_build gave it a layer. JFG_DEBUG_CPU_LAYER=1:
+// once a second, how many of those layers really reached the render call (the QA suite's reticle cases check this line).
+void cpu_layer_trace_drawn(bool drawn) {
+    if (!g_trace) return;
+    static uint32_t layers = 0, reached = 0;
+    static auto last = std::chrono::steady_clock::now();
+    layers++;
+    reached += drawn ? 1 : 0;
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last < std::chrono::seconds(1)) return;
+    std::fprintf(stderr, "[cpu-layer] drawn: %u of %u frames with a layer\n", reached, layers);
+    layers = reached = 0;
+    last = now;
+}
+
 } // namespace jfg
+
+// CPU-drawn rain and reticles with in-between frames (Smooth Motion): what rainDraw and fxOutputLines add to the finished
+// frame is taken out again and drawn on every presented frame by the render hook. rainDraw is reached only from
+// mainCPUeffects (through TrapDanglingJump); its paths without rain capture nothing.
+JFG_WRAP(rainDraw) {
+    jfg_cpu_rain_before(rdram, ctx);
+    rainDraw_orig(rdram, ctx);
+    jfg_cpu_rain_after(rdram, ctx);
+}
+
+JFG_WRAP(fxOutputLines) {
+    jfg_cpu_lines_before(rdram, ctx);
+    fxOutputLines_orig(rdram, ctx);
+    jfg_cpu_lines_after(rdram, ctx);
+}
+
+// During a fade mainCPUeffects calls fxInitLines instead of fxOutputLines; after its own call, the empty layer.
+static JfgCaller g_cpu_effects; // mainCPUeffects (frame 0x40)
+
+JFG_WRAP(mainCPUeffects) {
+    JfgCaller::Scope scope(g_cpu_effects, ctx, 0x40);
+    mainCPUeffects_orig(rdram, ctx);
+}
+
+JFG_WRAP(fxInitLines) {
+    const bool faded = g_cpu_effects.direct(ctx);
+    fxInitLines_orig(rdram, ctx);
+    if (faded) jfg_cpu_lines_faded(rdram, ctx);
+}

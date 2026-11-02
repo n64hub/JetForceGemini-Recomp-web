@@ -22,6 +22,9 @@
 [submodule "lib/SDL_GameControllerDB"]
 	path = lib/SDL_GameControllerDB
 	url = https://github.com/mdqinc/SDL_GameControllerDB.git
+[submodule "JFGRecompSyms"]
+	path = JFGRecompSyms
+	url = https://github.com/VibinToast/JFGRecompSyms.git
 [submodule "lib/N64Recomp-browser"]
 	path = lib/N64Recomp-browser
 	url = https://github.com/n64hub/N64Recomp-browser
