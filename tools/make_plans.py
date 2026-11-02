@@ -68,7 +68,9 @@ def visit(level, character):
 
 LOAD = [["until", "Device Name", 30000], ["wait", 9000]]
 TITLE, STORY_FIRST, CHARACTER_SELECT, GOLDWOOD_OPENING = 349, 322, 127, 93
-SETUP = [["rom", 473, 197], ["wait", 4000]]
+# Esc first: a fresh profile opens on the first-run language question (src/ui/ui_language_prompt.cpp), which Esc
+# closes in English; with none open it only puts the launcher's focus on Play.
+SETUP = [["key", "Escape", "Escape", 27], ["wait", 1000], ["rom", 473, 197], ["wait", 4000]]
 # Load ROM once the shader list Chrome builds behind the launcher is done: a click while it builds can be lost. Firefox
 # builds none there, and its line saying so is the one waited for. It is load's first step: an until takes only lines
 # that come after it starts, and Firefox's line comes right after Device Name.
@@ -77,7 +79,10 @@ PLAY_LOAD = [["until", r"RT64: all \d+ prebuilt shaders built|once the game draw
 DOWN = [["hold", "KeyS", "s", 83, 150], ["wait", 400]]
 # The regular plan's: the list's line waited for less, as the regular play's 3 minutes need (Chrome's came in 17-55 s).
 REGULAR_LOAD = [PLAY_LOAD[0][:2] + [40000], PLAY_LOAD[1]]
-START = [["eval", "try { FS.unlink('/home/web_user/saves/jfg-us.bin'); } catch (e) {}"],
+# The first step also turns the N64's controls on (src/jfg/jfg_web.cpp), which the keys below are: a new player's Modern
+# profile plays with the mouse's buttons.
+START = [["eval", "try { FS.unlink('/home/web_user/saves/jfg-us.bin'); } catch (e) {} "
+                  "if (Module._jfg_web_n64_controls) Module._jfg_web_n64_controls();"],
          ["click", 765, 277], ["until", "Initialized RDRAM", 60000], ["wait", 3000],
          ["evalFile", "shader_survey.js"], ["eval", f"waitLevel({TITLE}, 60000)"],
          ["pressUntil", "Enter", "Enter", 13, 100, 1500, f"level() !== {TITLE}", 30000], ["wait", 2500],
@@ -115,13 +120,19 @@ def held(k, *steps):
 def fire(ms):  # Z pressed every 300 ms for ms
     return ["pressUntil", *KEY_Z, 120, 300, "false", ms]
 
-# A round about a spot: out and back by as much, firing as it goes, the camera turned, a jump, aiming.
-FIGHT = [*held(KEY_W, fire(1800)), hold(KEY_A_BUTTON, 150), ["wait", 600],
-         hold(LEFT, 900), *held(KEY_R, fire(2000)), hold(RIGHT, 900),
+# A round about a spot: out and back by as much, firing as it goes, the camera turned, a jump, aiming. The play plan's
+# rounds take a shot a second into aiming (the weapon's reticle: upstream's 511e603 keeps it drawn with Display Frame
+# Rate, which every page has on).
+def fight(aim_shot=None):
+    aim = [fire(1000), ["shot", aim_shot], fire(1000)] if aim_shot else [fire(2000)]
+    return [*held(KEY_W, fire(1800)), hold(KEY_A_BUTTON, 150), ["wait", 600],
+         hold(LEFT, 900), *held(KEY_R, *aim), hold(RIGHT, 900),
          *held(KEY_S, fire(1800)), hold(C_UP, 200), ["wait", 800], hold(KEY_A_BUTTON, 150), ["wait", 600],
          *held(KEY_D, fire(1500)), *held(KEY_A, fire(1500)),
          hold(RIGHT, 900), fire(2500), hold(LEFT, 900), hold(C_DOWN, 300), ["wait", 500],
          hold(KEY_A_BUTTON, 150), ["wait", 600], fire(2500)]
+
+FIGHT = fight()
 
 def fight_steps(places):
     steps = [["keep", False], *ENTER, ["eval", "arm()"], ["keep", True]]
@@ -138,7 +149,7 @@ PLAYS = [("goldwood", 21, JUNO, 12), ("tawfret-castle", 136, JUNO, 5), ("ichor",
 
 def play_steps(name, level, character, seconds, regular=False):
     return [["need", f"warp({level}, {character}, 0, {seconds * 1000})"], ["wait", 3000], ["eval", "arm()"],
-            *([] if regular else [["wait", 3000]]), ["shot", f"{name}.png"], *FIGHT]
+            *([] if regular else [["wait", 3000]]), ["shot", f"{name}.png"], *fight(f"{name}-aim.png")]
 
 def sections():
     fights = dict(FIGHTS)

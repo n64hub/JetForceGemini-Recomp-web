@@ -26,6 +26,16 @@
  ],
  "setup": [
   [
+   "key",
+   "Escape",
+   "Escape",
+   27
+  ],
+  [
+   "wait",
+   1000
+  ],
+  [
    "rom",
    473,
    197
@@ -38,7 +48,7 @@
  "start": [
   [
    "eval",
-   "try { FS.unlink('/home/web_user/saves/jfg-us.bin'); } catch (e) {}"
+   "try { FS.unlink('/home/web_user/saves/jfg-us.bin'); } catch (e) {} if (Module._jfg_web_n64_controls) Module._jfg_web_n64_controls();"
   ],
   [
    "click",
@@ -263,7 +273,21 @@
    120,
    300,
    "false",
-   2000
+   1000
+  ],
+  [
+   "shot",
+   "goldwood-aim.png"
+  ],
+  [
+   "pressUntil",
+   "KeyQ",
+   "q",
+   81,
+   120,
+   300,
+   "false",
+   1000
   ],
   [
    "up",
@@ -496,7 +520,21 @@
    120,
    300,
    "false",
-   2000
+   1000
+  ],
+  [
+   "shot",
+   "tawfret-castle-aim.png"
+  ],
+  [
+   "pressUntil",
+   "KeyQ",
+   "q",
+   81,
+   120,
+   300,
+   "false",
+   1000
   ],
   [
    "up",
@@ -729,7 +767,21 @@
    120,
    300,
    "false",
-   2000
+   1000
+  ],
+  [
+   "shot",
+   "ichor-aim.png"
+  ],
+  [
+   "pressUntil",
+   "KeyQ",
+   "q",
+   81,
+   120,
+   300,
+   "false",
+   1000
   ],
   [
    "up",
@@ -962,7 +1014,21 @@
    120,
    300,
    "false",
-   2000
+   1000
+  ],
+  [
+   "shot",
+   "water-ruin-aim.png"
+  ],
+  [
+   "pressUntil",
+   "KeyQ",
+   "q",
+   81,
+   120,
+   300,
+   "false",
+   1000
   ],
   [
    "up",
