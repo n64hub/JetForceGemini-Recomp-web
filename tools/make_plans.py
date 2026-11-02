@@ -93,9 +93,11 @@ START = [["eval", "try { FS.unlink('/home/web_user/saves/jfg-us.bin'); } catch (
 ENTER = [["pressUntil", "Space", " ", 32, 100, 1500, f"level() !== {CHARACTER_SELECT}", 30000],
          ["eval", f"waitLevel({GOLDWOOD_OPENING}, 15000)"], ["wait", 1500]]
 # The play plan's START and ENTER: the same steps, each timeout what a run needs with room to spare (the title came
-# 15-17 s after the save's evalFile, every other step in 5 s or less).
+# 15-17 s after the save's evalFile in Chrome and 23-24 s in Firefox, which builds the boot section's 39 shaders before
+# it, every other step in 5 s or less). The title is a need: a run that misses it would press through the menus early
+# and warp into Goldwood with them still on screen.
 PLAY_START = [*START[:2], ["until", "Initialized RDRAM", 10000], ["wait", 2000], START[4],
-              ["eval", f"waitLevel({TITLE}, 22000)"],
+              ["need", f"waitLevel({TITLE}, 40000)"],
               ["pressUntil", "Enter", "Enter", 13, 100, 1500, f"level() !== {TITLE}", 10000], *START[7:-3],
               ["eval", f"waitLevel({STORY_FIRST}, 8000)"],
               ["pressUntil", "Enter", "Enter", 13, 100, 1500, f"level() === {CHARACTER_SELECT}", 10000], ["wait", 2000]]

@@ -68,8 +68,8 @@
    "shader_survey.js"
   ],
   [
-   "eval",
-   "waitLevel(349, 22000)"
+   "need",
+   "waitLevel(349, 40000)"
   ],
   [
    "pressUntil",
