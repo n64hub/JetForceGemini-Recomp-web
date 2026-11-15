@@ -2497,20 +2497,21 @@ index f6072e1..10d9a34 100644
      // RDP
      static uint8_t getCommandLength(uint32_t commandId) {
          if (commandId == (G_TEXRECT & 0x3F) || commandId == (G_TEXRECTFLIP & 0x3F)) {
-@@ -149,6 +168,13 @@ namespace RT64 {
+@@ -146,6 +165,14 @@ namespace RT64 {
+                 couldMakeTile = fbManager.makeFramebufferTile(fb, addressStart, addressEnd, tileWidth, tileHeight, fbTile, RGBA32);
+             }
+ 
++            if (std::getenv("RT64_DKR_FB_OVERLAP_LOG") != nullptr) {
++                static std::atomic_uint32_t overlapLogCount = 0;
++                const uint32_t overlapEnd = fb->addressStart + fb->imageRowBytes(fb->width) * fb->maxHeight;
++                if ((fb->addressStart < addressEnd) && (overlapEnd > addressStart) && (overlapLogCount.fetch_add(1, std::memory_order_relaxed) < 256)) {
++                    std::fprintf(stderr, "[RT64] TMEM load overlaps tracked FB: fb=[%06X,%06X) w=%u h=%u(max %u) load=[%06X,%06X)\n",
++                        fb->addressStart, overlapEnd, fb->width, fb->height, fb->maxHeight, addressStart, addressEnd);
++                }
++            }
              // Always tags regions in TMEM, regardless of whether it's possible to make a copy or not.
              uint32_t fbEnd = fb->addressStart + fb->imageRowBytes(fb->width) * fb->maxHeight;
              bool syncRequired = (fb->addressStart < addressEnd) && (fbEnd > addressStart);
-+            if (syncRequired && (std::getenv("RT64_DKR_FB_OVERLAP_LOG") != nullptr)) {
-+                static std::atomic_uint32_t overlapLogCount = 0;
-+                if (overlapLogCount.fetch_add(1, std::memory_order_relaxed) < 256) {
-+                    std::fprintf(stderr, "[RT64] TMEM load overlaps tracked FB: fb=[%06X,%06X) w=%u h=%u(max %u) load=[%06X,%06X)\n",
-+                        fb->addressStart, fbEnd, fb->width, fb->height, fb->maxHeight, addressStart, addressEnd);
-+                }
-+            }
-             fbManager.insertRegionsTMEM(fb->addressStart, tmemStart, std::min(tmemWords, uint32_t(RDP_TMEM_WORDS)), tmemMask, RGBA32, syncRequired, couldMakeTile ? &regionIterators : nullptr);
-             
-             if (couldMakeTile) {
 @@ -295,7 +321,10 @@ namespace RT64 {
      constexpr uint32_t ExtendedMask = 0x80000000U;
  
