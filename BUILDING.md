@@ -97,10 +97,6 @@ then put back the list's header, which says what was played.
 
 ## How it plays
 
-How the page plays in Chrome and Firefox, run by run, is recorded in N64Recomp-browser's
-[plays.jsonl](https://github.com/n64hub/N64Recomp-browser/blob/main/plays.jsonl) and its
-[games table](https://github.com/n64hub/N64Recomp-browser#games).
-
 The page opens widescreen, at Game Frame Rate 60 (the menu's "60 (Experimental)") and with Smooth Motion up to the
 display's rate (`src/jfg/jfg_options.h`): a page interpolates to the display's rate whatever its desktop build
 defaults to (N64Recomp-browser's CLAUDE.md, Rules). A new player starts on the Modern profile, as on the desktop, and

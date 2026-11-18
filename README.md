@@ -12,9 +12,8 @@
 
 **Play it in the browser: https://n64hub.com/jet-force-gemini/**, with your own ROM, picked in the
 launcher and kept in the browser. It needs WebGPU (Chrome or Edge 113 and up, or Firefox 141 and up on Windows). The
-page is built from this branch and published with N64Recomp-browser's `tools/publish_page.sh`, so it can be a commit
-or two behind. The page leaves out what a browser can't do: mods, texture packs, the debug window and the F10 toolbar
-(BUILDING.md).
+page is built from this branch, so it can be a commit or two behind. The page leaves out what a browser can't do: mods,
+texture packs, the debug window and the F10 toolbar (BUILDING.md).
 
 ![Jet Force Gemini: Recompiled](images/jfg-logo-recompiled-transparent.png)
 
