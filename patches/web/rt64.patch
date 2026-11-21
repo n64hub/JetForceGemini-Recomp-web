@@ -1633,19 +1633,20 @@ index d635662..f7b49c6 100644
          };
  
 diff --git a/src/hle/rt64_game_frame.cpp b/src/hle/rt64_game_frame.cpp
-index a5405bb..c13de25 100644
+index 391213e..6a310be 100644
 --- a/src/hle/rt64_game_frame.cpp
 +++ b/src/hle/rt64_game_frame.cpp
-@@ -3,6 +3,8 @@
- //
+@@ -11,6 +11,9 @@
+ #include "rt64_workload_queue.h"
  
- #include <algorithm>
+ #include "xxHash/xxh3.h"
++
 +#include <cstdio>
 +#include <cstdlib>
  
- #include "common/rt64_math.h"
- 
-@@ -918,7 +920,31 @@ namespace RT64 {
+ namespace RT64 {
+     // GameFrame
+@@ -1543,7 +1546,31 @@ namespace RT64 {
                      prevIt++;
                  }
                  else {
@@ -1678,7 +1679,7 @@ index a5405bb..c13de25 100644
                      curIt++;
                      prevIt++;
                  }
-@@ -1026,6 +1052,70 @@ namespace RT64 {
+@@ -1651,6 +1678,70 @@ namespace RT64 {
          matchScenes(perspectiveScenes, prevFrame.perspectiveScenes);
          matchScenes(orthographicScenes, prevFrame.orthographicScenes);
  
@@ -7829,7 +7830,7 @@ index 11a7f8d..46c1608 100644
          void setupColor(RenderWorker *worker, uint32_t width, uint32_t height);
          void setupDepth(RenderWorker *worker, uint32_t width, uint32_t height);
 diff --git a/src/render/rt64_transform_processor.cpp b/src/render/rt64_transform_processor.cpp
-index 8b1a312..fa87500 100644
+index 37e88fc..5dfd6a6 100644
 --- a/src/render/rt64_transform_processor.cpp
 +++ b/src/render/rt64_transform_processor.cpp
 @@ -85,7 +85,11 @@ namespace RT64 {
